@@ -2,10 +2,10 @@
 .STACK 100H
 
 .DATA
-    ; ===== 共享变量 =====
-    principal       DW 0          ; 本金 (1-9999)
-    rate            DW 0          ; 年利率 (1-99)
-    tenure_months   DW 0          ; 存款期限/月份 (1-99)
+    ; ===== 共享变量（组员2负责的数据） =====
+    principal       DW 0          ; 本金 (如 1000)
+    rate            DW 0          ; 年利率 (如 5 代表 5%)
+    tenure_months   DW 0          ; 存款期限/月份 (如 12)
     simple_interest DW 0          ; [功能1] 计算出的单利利息
     total_maturity  DW 0          ; [功能2] 计算出的到期总金额
 
@@ -13,7 +13,7 @@
     msgPromptP  DB 13,10,'Enter Principal Amount ($1-9999): $'
     msgPromptR  DB 13,10,'Enter Annual Rate % (1-99): $'
     msgPromptM  DB 13,10,'Enter Tenure in Months (1-99): $'
-    msgErr      DB 13,10,'[ERROR] Invalid input! Out of range or non-digit.$'
+    msgErr      DB 13,10,'[ERROR] Invalid input! Please enter digits only.$'
     
     ; ===== 计算输出调试提示 =====
     msgRes1     DB 13,10,'[Calc 1] Simple Interest: $'
@@ -21,6 +21,9 @@
 
 .CODE
 
+; =========================================================
+; 测试主程序 (独立的测试入口，组长合并时只需复制下方 PROC)
+; =========================================================
 MAIN PROC
     MOV AX, @DATA
     MOV DS, AX
@@ -34,7 +37,7 @@ MAIN PROC
     ; 3. 调用计算功能 2：到期总额计算
     CALL CALC_TOTAL_MATURITY_PROC
 
-    ; 4. 显示计算结果
+    ; 4. 显示计算结果（调试用）
     LEA DX, msgRes1
     MOV AH, 09H
     INT 21H
@@ -47,27 +50,28 @@ MAIN PROC
     MOV AX, total_maturity
     CALL M2_PRINT_NUM
 
+    ; 退出程序
     MOV AH, 4CH
     INT 21H
 MAIN ENDP
 
 
 ; =========================================================
-; 1. 数据输入与范围校验模块
+; 1. 数据输入与校验模块 (Data Entry & Input Validation)
 ; =========================================================
 INPUT_DATA_PROC PROC
     PUSH AX
+    PUSH BX
+    PUSH CX
     PUSH DX
 
 GET_P:
     LEA DX, msgPromptP
     MOV AH, 09H
     INT 21H
-    MOV AX, 9999          ; 最大值限制为 9999
     CALL READ_NUM_VALIDATE
-    JC ERR_P              ; CF=1 表示输入非法/超限
     CMP AX, 0
-    JE ERR_P              ; 不能为空或0
+    JE ERR_P
     MOV principal, AX
     JMP GET_R
 
@@ -81,9 +85,7 @@ GET_R:
     LEA DX, msgPromptR
     MOV AH, 09H
     INT 21H
-    MOV AX, 99            ; 最大值限制为 99
     CALL READ_NUM_VALIDATE
-    JC ERR_R
     CMP AX, 0
     JE ERR_R
     MOV rate, AX
@@ -99,9 +101,7 @@ GET_M:
     LEA DX, msgPromptM
     MOV AH, 09H
     INT 21H
-    MOV AX, 99            ; 最大值限制为 99
     CALL READ_NUM_VALIDATE
-    JC ERR_M
     CMP AX, 0
     JE ERR_M
     MOV tenure_months, AX
@@ -115,6 +115,8 @@ ERR_M:
 
 INPUT_DONE:
     POP DX
+    POP CX
+    POP BX
     POP AX
     RET
 INPUT_DATA_PROC ENDP
@@ -122,19 +124,23 @@ INPUT_DATA_PROC ENDP
 
 ; =========================================================
 ; 2. 计算功能 1：单利计算 (Simple Interest)
+; 公式: Interest = (Principal * Rate * Months) / 1200
 ; =========================================================
 CALC_SIMPLE_INTEREST_PROC PROC
     PUSH AX
     PUSH BX
     PUSH DX
 
+    ; AX = Principal * Rate
     MOV AX, principal
     MOV BX, rate
     MUL BX                ; DX:AX = P * R
 
+    ; DX:AX = (P * R) * Months
     MOV BX, tenure_months
     MUL BX                ; DX:AX = P * R * M
 
+    ; AX / 1200
     MOV BX, 1200
     DIV BX                ; 商在 AX 中
 
@@ -149,6 +155,7 @@ CALC_SIMPLE_INTEREST_PROC ENDP
 
 ; =========================================================
 ; 3. 计算功能 2：到期总额计算 (Total Maturity Amount)
+; 公式: Total = Principal + Simple Interest
 ; =========================================================
 CALC_TOTAL_MATURITY_PROC PROC
     PUSH AX
@@ -165,57 +172,46 @@ CALC_TOTAL_MATURITY_PROC ENDP
 
 
 ; =========================================================
-; 带上限校验与防错的数字读取子程序
-; 入口参数: AX = 该项设定的最大值上限 (Limit)
-; 出口参数: AX = 转换出的数值, CF=0(成功) / CF=1(非法或超出上限)
+; 辅助工具：键盘读取数字 + 严格字符校验 (0-9)
+; 返回: AX = 转换后的整数 (若非数字或回车直接输入则返 0)
 ; =========================================================
 READ_NUM_VALIDATE PROC
     PUSH BX
     PUSH CX
     PUSH DX
 
-    MOV SI, AX            ; 将上限存入 SI
     MOV BX, 0             ; 累加器清零
-    MOV CX, 0             ; 输入位数计数器
 
 READ_CHAR_LOOP:
-    MOV AH, 01H
+    MOV AH, 01H           ; 读取单个字符
     INT 21H
 
-    CMP AL, 13            ; 回车键？
-    JE CHECK_ENTER
+    CMP AL, 13            ; 按下 Enter 键？
+    JE READ_FINISHED
 
-    CMP AL, '0'
-    JB SET_INVALID
-    CMP AL, '9'
-    JA SET_INVALID
+    CMP AL, '0'           ; 小于 '0' 则非法
+    JB READ_INVALID
+    CMP AL, '9'           ; 大于 '9' 则非法
+    JA READ_INVALID
 
-    SUB AL, '0'
-    MOV DL, AL
-    MOV DH, 0
+    SUB AL, '0'           ; ASCII 转数字
+    MOV CL, AL
+    MOV CH, 0
 
-    ; BX = BX * 10 + DX
+    ; BX = BX * 10 + CX
     MOV AX, BX
-    MOV DI, 10
-    MUL DI
-    ADD AX, DX
+    MOV DX, 10
+    MUL DX
+    ADD AX, CX
     MOV BX, AX
-
-    INC CX
     JMP READ_CHAR_LOOP
 
-CHECK_ENTER:
-    CMP CX, 0             ; 未输入直接回车
-    JE SET_INVALID
-    CMP BX, SI            ; 是否超过最大上限？
-    JA SET_INVALID
-    
-    MOV AX, BX
-    CLC                   ; 清除进位标志（成功）
+READ_INVALID:
+    MOV AX, 0
     JMP READ_EXIT
 
-SET_INVALID:
-    STC                   ; 设置进位标志（失败）
+READ_FINISHED:
+    MOV AX, BX
 
 READ_EXIT:
     POP DX
