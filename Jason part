@@ -1,1 +1,258 @@
+.MODEL SMALL
+.STACK 100H
 
+.DATA
+    ; ===== Member 1: Login & Navigation Variables =====
+    sys_user        DB 'admin$'
+    sys_pass        DB '1234$'
+    user_id         DB 11 DUP('$')
+    user_pass       DB 5 DUP('$')
+    menu_choice     DB 0
+
+    ; ===== Member 2: Inputs & Basic Calculation Variables (预留给组员2) =====
+    principal       DW 0          ; 本金
+    rate            DW 0          ; 年利率
+    tenure_months   DW 0          ; 存款期限
+    simple_interest DW 0          ; [功能1] 单利利息
+    total_maturity  DW 0          ; [功能2] 到期总金额
+
+    ; ===== Member 3: Advanced Calculation & Output Variables (预留给组员3) =====
+    tax_rate        DW 10         ; 利息税率
+    net_interest    DW 0          ; [功能3] 税后净利息
+    monthly_payout  DW 0          ; [功能4] 每月平均利息
+    
+    ; ===== Input Validation Buffer =====
+    input_buffer    DB 6, ?, 6 DUP('$')
+
+    ; ===== Member 1: 界面文本 =====
+    m_title   DB 0DH, 0AH, "=== BANK INTEREST SYSTEM ===", 0DH, 0AH, "$"
+    m_uPrompt DB 0DH, 0AH, "Enter Username: $"
+    m_pPrompt DB 0DH, 0AH, "Enter Password: $"
+    m_ok      DB 0DH, 0AH, "Login Success!", 0DH, 0AH, "$"
+    m_fail    DB 0DH, 0AH, "Wrong Username or Password! Try again.", 0DH, 0AH, "$"
+    
+    m_menu    DB 0DH, 0AH, 0DH, 0AH, "========== MAIN MENU ==========", 0DH, 0AH
+              DB "1. Calculate Simple Interest", 0DH, 0AH
+              DB "2. Calculate Total Maturity Amount", 0DH, 0AH
+              DB "3. Calculate Net Interest (After Tax)", 0DH, 0AH
+              DB "4. Calculate Monthly Payout", 0DH, 0AH
+              DB "5. Exit System", 0DH, 0AH
+              DB "Select option (1-5) and press Enter: $"
+              
+    m_err     DB 0DH, 0AH, "Invalid choice! Enter 1-5 and press Enter.$"
+    m_exit    DB 0DH, 0AH, "Do you want to exit (y/n)? $"
+    m_bye     DB 0DH, 0AH, "Logged Out Successfully. Goodbye!$"
+
+    ; 临时占位文本
+    m_stub    DB 0DH, 0AH, "[Member Module Function Executed]", 0DH, 0AH, "$"
+
+.CODE
+MAIN PROC
+    MOV AX, @DATA
+    MOV DS, AX
+
+    ; 打印系统标题
+    LEA DX, m_title
+    MOV AH, 09H
+    INT 21H
+
+; ==============================================
+; Member 1: 登录模块 (Login Module)
+; ==============================================
+LOGIN_PAGE:
+    ; --- 1. 输入 Username ---
+    LEA DX, m_uPrompt
+    MOV AH, 09H
+    INT 21H
+
+    LEA DX, input_buffer
+    MOV AH, 0AH
+    INT 21H
+
+    ; 将 buffer 数据拷贝到 user_id
+    MOV user_id[0], '$'
+    MOV CL, input_buffer[1]
+    CMP CL, 0
+    JE  CHECK_USER
+    
+    MOV CH, 0
+    MOV SI, 0
+COPY_U:
+    MOV AL, input_buffer[SI+2]
+    MOV user_id[SI], AL
+    INC SI
+    LOOP COPY_U
+    MOV user_id[SI], '$'
+
+CHECK_USER:
+    ; --- 2. 输入 Password ---
+    LEA DX, m_pPrompt
+    MOV AH, 09H
+    INT 21H
+
+    LEA DX, input_buffer
+    MOV AH, 0AH
+    INT 21H
+
+    ; 将 buffer 数据拷贝到 user_pass
+    MOV user_pass[0], '$'
+    MOV CL, input_buffer[1]
+    CMP CL, 0
+    JE  CHECK_PASS
+    
+    MOV CH, 0
+    MOV SI, 0
+COPY_P:
+    MOV AL, input_buffer[SI+2]
+    MOV user_pass[SI], AL
+    INC SI
+    LOOP COPY_P
+    MOV user_pass[SI], '$'
+
+CHECK_PASS:
+    ; --- 3. 校验 Username (admin) ---
+    MOV AL, user_id[0]
+    CMP AL, sys_user[0]
+    JNE LOGIN_FAIL
+    MOV AL, user_id[1]
+    CMP AL, sys_user[1]
+    JNE LOGIN_FAIL
+    MOV AL, user_id[2]
+    CMP AL, sys_user[2]
+    JNE LOGIN_FAIL
+    MOV AL, user_id[3]
+    CMP AL, sys_user[3]
+    JNE LOGIN_FAIL
+    MOV AL, user_id[4]
+    CMP AL, sys_user[4]
+    JNE LOGIN_FAIL
+
+    ; --- 4. 校验 Password (1234) ---
+    MOV AL, user_pass[0]
+    CMP AL, sys_pass[0]
+    JNE LOGIN_FAIL
+    MOV AL, user_pass[1]
+    CMP AL, sys_pass[1]
+    JNE LOGIN_FAIL
+    MOV AL, user_pass[2]
+    CMP AL, sys_pass[2]
+    JNE LOGIN_FAIL
+    MOV AL, user_pass[3]
+    CMP AL, sys_pass[3]
+    JNE LOGIN_FAIL
+    MOV AL, user_pass[4]
+    CMP AL, sys_pass[4]
+    JNE LOGIN_FAIL
+
+    ; 验证成功
+    LEA DX, m_ok
+    MOV AH, 09H
+    INT 21H
+    JMP SHOW_MENU
+
+LOGIN_FAIL:
+    LEA DX, m_fail
+    MOV AH, 09H
+    INT 21H
+    JMP LOGIN_PAGE
+
+; ==============================================
+; Member 1: 主菜单模块 (需按 Enter 确定跳转)
+; ==============================================
+SHOW_MENU:
+    LEA DX, m_menu
+    MOV AH, 09H
+    INT 21H
+
+    ; 读取输入 (输入后按 Enter)
+    LEA DX, input_buffer
+    MOV AH, 0AH
+    INT 21H
+
+    ; 检查输入长度，只允许输入 1 个字符 + Enter
+    MOV AL, input_buffer[1]
+    CMP AL, 1
+    JNE MENU_ERROR
+
+    ; 保存选项到 menu_choice
+    MOV AL, input_buffer[2]
+    MOV menu_choice, AL
+
+    ; 校验与菜单跳转 (1-5)
+    CMP menu_choice, '1'
+    JE  EXEC_FUNC1
+    CMP menu_choice, '2'
+    JE  EXEC_FUNC2
+    CMP menu_choice, '3'
+    JE  EXEC_FUNC3
+    CMP menu_choice, '4'
+    JE  EXEC_FUNC4
+    CMP menu_choice, '5'
+    JE  ASK_EXIT
+
+MENU_ERROR:
+    LEA DX, m_err
+    MOV AH, 09H
+    INT 21H
+    JMP SHOW_MENU
+
+; ==============================================
+; Member 1: 预留给 Member 2 和 Member 3 的功能跳转入口
+; ==============================================
+EXEC_FUNC1:
+    ; --- Member 2 贴代码位置: Calculate Simple Interest ---
+    LEA DX, m_stub
+    MOV AH, 09H
+    INT 21H
+    JMP SHOW_MENU
+
+EXEC_FUNC2:
+    ; --- Member 2 贴代码位置: Calculate Total Maturity ---
+    LEA DX, m_stub
+    MOV AH, 09H
+    INT 21H
+    JMP SHOW_MENU
+
+EXEC_FUNC3:
+    ; --- Member 3 贴代码位置: Calculate Net Interest ---
+    LEA DX, m_stub
+    MOV AH, 09H
+    INT 21H
+    JMP SHOW_MENU
+
+EXEC_FUNC4:
+    ; --- Member 3 贴代码位置: Calculate Monthly Payout ---
+    LEA DX, m_stub
+    MOV AH, 09H
+    INT 21H
+    JMP SHOW_MENU
+
+; ==============================================
+; Member 1: 退出确认模块 (需按 Enter 确定)
+; ==============================================
+ASK_EXIT:
+    LEA DX, m_exit
+    MOV AH, 09H
+    INT 21H
+
+    LEA DX, input_buffer
+    MOV AH, 0AH
+    INT 21H
+
+    MOV AL, input_buffer[2]
+    CMP AL, 'y'
+    JE  EXIT_NOW
+    CMP AL, 'Y'
+    JE  EXIT_NOW
+    JMP SHOW_MENU
+
+EXIT_NOW:
+    LEA DX, m_bye
+    MOV AH, 09H
+    INT 21H
+
+    MOV AH, 4CH
+    INT 21H
+MAIN ENDP
+
+END MAIN
