@@ -1,1 +1,690 @@
+.MODEL SMALL
+.STACK 100H
 
+.DATA
+    ; =========================================================
+    ; [MEMBER 1 WORK] - LOGIN & MENU SYSTEM VARIABLES
+    ; =========================================================
+    sys_user        DB 'admin$'
+    sys_pass        DB '1234$'
+    user_id         DB 11 DUP('$')
+    user_pass       DB 5 DUP('$')
+    menu_choice     DB 0
+
+    input_buffer    DB 6, ?, 6 DUP('$')   ; 通用字符串缓冲区 (AH=0AH)
+
+    m_title   DB 0DH, 0AH, "========================================"
+              DB 0DH, 0AH, "      BANKING INTEREST SYSTEM           "
+              DB 0DH, 0AH, "========================================$"
+    m_uPrompt DB 0DH, 0AH, "Enter Username: $"
+    m_pPrompt DB 0DH, 0AH, "Enter Password: $"
+    m_ok      DB 0DH, 0AH, "Login Success!", 0DH, 0AH, "$"
+    m_fail    DB 0DH, 0AH, "Wrong Username or Password! Try again.", 0DH, 0AH, "$"
+    
+    m_menu    DB 0DH, 0AH, 0DH, 0AH, "========== MAIN MENU ==========", 0DH, 0AH
+              DB "1. Calculate Banking Interest & Generate Summary", 0DH, 0AH
+              DB "2. Exit System", 0DH, 0AH
+              DB "Select option (1-2) and press Enter: $"
+              
+    m_err     DB 0DH, 0AH, "Invalid choice! Enter 1 or 2 and press Enter.$"
+    m_exit    DB 0DH, 0AH, "Do you want to exit (y/n)? $"
+    m_bye     DB 0DH, 0AH, "Logged Out Successfully. Goodbye!$"
+
+    ; =========================================================
+    ; [MEMBER 2 WORK] - INPUTS & BASIC CALCULATION VARIABLES
+    ; (专门标注给 Member 2 的变量定义区)
+    ; =========================================================
+    MAX_PRINCIPAL   EQU 9999D             ; 本金上限 RM 9999
+    MAX_RATE        EQU 99D               ; 利率上限 99%
+    MAX_TENURE      EQU 99D               ; 期限上限 99个月
+
+    principal       DW 0                  ; 本金 (RM)
+    rate            DW 0                  ; 年利率 (%)
+    tenure_months   DW 0                  ; 存款期限 (月)
+    simple_interest DW 0                  ; [功能1] 单利利息整数部分
+    int_rem         DW 0                  ; 利息余数 (用于精确小数位)
+    total_maturity  DW 0                  ; [功能2] 到期总金额
+
+    STR_P       DB 0DH, 0AH, "ENTER PRINCIPAL AMOUNT (RM 1-9999): $"
+    STR_R       DB 0DH, 0AH, "ENTER ANNUAL RATE % (1-99): $"
+    STR_M       DB 0DH, 0AH, "ENTER TENURE IN MONTHS (1-99): $"
+    STR_ERR     DB 0DH, 0AH, "INVALID INPUT OR OUT OF RANGE! PLEASE TRY AGAIN.$"
+
+    ; =========================================================
+    ; [MEMBER 3 WORK] - ADVANCED CALCULATION & REPORT VARIABLES
+    ; =========================================================
+    tax_deduction   DW 0                  ; [功能3] 税收 10%
+    monthly_payout  DW 0                  ; [功能4] 每月平均收益
+
+    title_bm    DB 0DH, 0AH, 0DH, 0AH, "========================================"
+                DB 0DH, 0AH, "      BANK ACCOUNT SUMMARY REPORT       "
+                DB 0DH, 0AH, "========================================$"
+    rpt_p       DB 0DH, 0AH, "  PRINCIPAL AMOUNT : RM $"
+    rpt_r       DB 0DH, 0AH, "  ANNUAL RATE (%)  : $"
+    rpt_m       DB 0DH, 0AH, "  TENURE (MONTHS)  : $"
+    rpt_f1      DB 0DH, 0AH, "  TOTAL INTEREST   : RM $"
+    rpt_f2      DB 0DH, 0AH, "  TOTAL AT MATURITY: RM $"
+    rpt_f3      DB 0DH, 0AH, "  TAX DEDUCTION(10%): RM $"
+    rpt_f4      DB 0DH, 0AH, "  MONTHLY PAYOUT   : RM $"
+    nl          DB 0DH, 0AH, "$"
+
+    digits      DB 6 DUP(?)               ; 数字打印缓冲区
+
+.CODE
+
+; =========================================================
+; MAIN PROC (主程序流程)
+; =========================================================
+MAIN PROC
+    MOV AX, @DATA
+    MOV DS, AX
+
+    ; 打印系统标题
+    LEA DX, m_title
+    MOV AH, 09H
+    INT 21H
+
+; ---------------------------------------------------------
+; [MEMBER 1 WORK] - 登录功能 (Login Module)
+; ---------------------------------------------------------
+LOGIN_PAGE:
+    ; 1. 输入 Username
+    LEA DX, m_uPrompt
+    MOV AH, 09H
+    INT 21H
+
+    LEA DX, input_buffer
+    MOV AH, 0AH
+    INT 21H
+
+    MOV user_id[0], '$'
+    MOV CL, input_buffer[1]
+    CMP CL, 0
+    JE  CHECK_USER
+    
+    MOV CH, 0
+    MOV SI, 0
+COPY_U:
+    MOV AL, input_buffer[SI+2]
+    MOV user_id[SI], AL
+    INC SI
+    LOOP COPY_U
+    MOV user_id[SI], '$'
+
+CHECK_USER:
+    ; 2. 输入 Password
+    LEA DX, m_pPrompt
+    MOV AH, 09H
+    INT 21H
+
+    LEA DX, input_buffer
+    MOV AH, 0AH
+    INT 21H
+
+    MOV user_pass[0], '$'
+    MOV CL, input_buffer[1]
+    CMP CL, 0
+    JE  CHECK_PASS
+    
+    MOV CH, 0
+    MOV SI, 0
+COPY_P:
+    MOV AL, input_buffer[SI+2]
+    MOV user_pass[SI], AL
+    INC SI
+    LOOP COPY_P
+    MOV user_pass[SI], '$'
+
+CHECK_PASS:
+    ; 3. 校验 Username (admin)
+    MOV AL, user_id[0]
+    CMP AL, sys_user[0]
+    JNE LOGIN_FAIL
+    MOV AL, user_id[1]
+    CMP AL, sys_user[1]
+    JNE LOGIN_FAIL
+    MOV AL, user_id[2]
+    CMP AL, sys_user[2]
+    JNE LOGIN_FAIL
+    MOV AL, user_id[3]
+    CMP AL, sys_user[3]
+    JNE LOGIN_FAIL
+    MOV AL, user_id[4]
+    CMP AL, sys_user[4]
+    JNE LOGIN_FAIL
+
+    ; 4. 校验 Password (1234)
+    MOV AL, user_pass[0]
+    CMP AL, sys_pass[0]
+    JNE LOGIN_FAIL
+    MOV AL, user_pass[1]
+    CMP AL, sys_pass[1]
+    JNE LOGIN_FAIL
+    MOV AL, user_pass[2]
+    CMP AL, sys_pass[2]
+    JNE LOGIN_FAIL
+    MOV AL, user_pass[3]
+    CMP AL, sys_pass[3]
+    JNE LOGIN_FAIL
+    MOV AL, user_pass[4]
+    CMP AL, sys_pass[4]
+    JNE LOGIN_FAIL
+
+    ; 验证成功
+    LEA DX, m_ok
+    MOV AH, 09H
+    INT 21H
+    JMP SHOW_MENU
+
+LOGIN_FAIL:
+    LEA DX, m_fail
+    MOV AH, 09H
+    INT 21H
+    JMP LOGIN_PAGE
+
+; ---------------------------------------------------------
+; [MEMBER 1 WORK] - 主菜单控制 (Menu Module)
+; ---------------------------------------------------------
+SHOW_MENU:
+    LEA DX, m_menu
+    MOV AH, 09H
+    INT 21H
+
+    LEA DX, input_buffer
+    MOV AH, 0AH
+    INT 21H
+
+    MOV AL, input_buffer[1]
+    CMP AL, 1
+    JNE MENU_ERROR
+
+    MOV AL, input_buffer[2]
+    MOV menu_choice, AL
+
+    CMP menu_choice, '1'
+    JE  EXEC_SYSTEM_CALC
+    CMP menu_choice, '2'
+    JE  ASK_EXIT
+
+MENU_ERROR:
+    LEA DX, m_err
+    MOV AH, 09H
+    INT 21H
+    JMP SHOW_MENU
+
+; ---------------------------------------------------------
+; 核心业务调用 (Member 2 输入/基础计算 -> Member 3 高级计算/报告)
+; ---------------------------------------------------------
+EXEC_SYSTEM_CALC:
+    ; 1. 调用 Member 2 的数据输入与 Validation 校验
+    CALL M2_INPUT_DATA_PROC
+
+    ; 2. 调用 Member 2 的计算功能 1 (单利) 和 功能 2 (到期总额)
+    CALL M2_CALC_SIMPLE_INTEREST_PROC
+    CALL M2_CALC_TOTAL_MATURITY_PROC
+
+    ; 3. 调用 Member 3 的计算功能 3 (扣税) 和 功能 4 (月收益)
+    CALL M3_CALC_ADVANCED_PROC
+
+    ; 4. 调用 Member 3 的报告打印
+    CALL M3_DISPLAY_SUMMARY_PROC
+
+    JMP SHOW_MENU
+
+; ---------------------------------------------------------
+; [MEMBER 1 WORK] - 退出系统确认
+; ---------------------------------------------------------
+ASK_EXIT:
+    LEA DX, m_exit
+    MOV AH, 09H
+    INT 21H
+
+    LEA DX, input_buffer
+    MOV AH, 0AH
+    INT 21H
+
+    MOV AL, input_buffer[2]
+    CMP AL, 'y'
+    JE  EXIT_NOW
+    CMP AL, 'Y'
+    JE  EXIT_NOW
+    JMP SHOW_MENU
+
+EXIT_NOW:
+    LEA DX, m_bye
+    MOV AH, 09H
+    INT 21H
+
+    MOV AH, 4CH
+    INT 21H
+MAIN ENDP
+
+
+; =========================================================
+; =========================================================
+; [MEMBER 2 WORK] - DATA ENTRY WITH INPUT VALIDATION
+; 数据输入与范围检测模块 (全部采用老师 Chapter 4/8 基础指令)
+; =========================================================
+; =========================================================
+
+M2_INPUT_DATA_PROC PROC
+    PUSH AX
+    PUSH BX
+    PUSH CX
+    PUSH DX
+
+GET_P:
+    MOV AH, 09H
+    LEA DX, STR_P
+    INT 21H
+    
+    MOV CX, 1              ; 最小值 = RM 1
+    MOV DX, MAX_PRINCIPAL  ; 最大值 = RM 9999
+    CALL M2_READ_NUM_RANGE
+    JC ERR_P               ; 如果 CF=1，代表非法输入/越界，重新输入
+    MOV principal, AX
+    JMP GET_R
+
+ERR_P:
+    MOV AH, 09H
+    LEA DX, STR_ERR
+    INT 21H
+    JMP GET_P
+
+GET_R:
+    MOV AH, 09H
+    LEA DX, STR_R
+    INT 21H
+    
+    MOV CX, 1              ; 最小值 = 1%
+    MOV DX, MAX_RATE       ; 最大值 = 99%
+    CALL M2_READ_NUM_RANGE
+    JC ERR_R
+    MOV rate, AX
+    JMP GET_M
+
+ERR_R:
+    MOV AH, 09H
+    LEA DX, STR_ERR
+    INT 21H
+    JMP GET_R
+
+GET_M:
+    MOV AH, 09H
+    LEA DX, STR_M
+    INT 21H
+    
+    MOV CX, 1              ; 最小值 = 1个月
+    MOV DX, MAX_TENURE     ; 最大值 = 99个月
+    CALL M2_READ_NUM_RANGE
+    JC ERR_M
+    MOV tenure_months, AX
+    JMP INPUT_DONE
+
+ERR_M:
+    MOV AH, 09H
+    LEA DX, STR_ERR
+    INT 21H
+    JMP GET_M
+
+INPUT_DONE:
+    POP DX
+    POP CX
+    POP BX
+    POP AX
+    RET
+M2_INPUT_DATA_PROC ENDP
+
+
+; ---------------------------------------------------------
+; [MEMBER 2 WORK] - READ_NUM_RANGE
+; 键盘读取与 Validation 校验工具 (标准的 8086 语法)
+; 入口: CX = MIN, DX = MAX
+; 出口: AX = 整数结果 | CF=0 (成功), CF=1 (失败)
+; ---------------------------------------------------------
+M2_READ_NUM_RANGE PROC
+    PUSH BX
+    PUSH CX
+    PUSH DX
+    PUSH SI
+    PUSH DI
+
+    MOV SI, CX            ; SI = 最小值
+    MOV DI, DX            ; DI = 最大值
+    MOV BX, 0             ; BX 累加数值
+    MOV CX, 0             ; CX 记录输入的字符数
+
+READ_CHAR_LOOP:
+    MOV AH, 01H           ; 单字符带回显读取 (Chapter 4)
+    INT 21H
+
+    CMP AL, 0DH           ; 检查是否按 Enter 键
+    JE CHECK_RANGE
+
+    CMP AL, '0'           ; 小于 '0'
+    JB INPUT_ERROR
+    CMP AL, '9'           ; 大于 '9'
+    JA INPUT_ERROR
+
+    SUB AL, '0'           ; ASCII 码转数字 (Chapter 4)
+    MOV AH, 0
+    PUSH AX
+
+    ; BX = BX * 10
+    MOV AX, BX
+    MOV DX, 10D
+    MUL DX                ; Chapter 7 MUL 指令
+    JC POP_AND_ERR
+
+    POP DX
+    ADD AX, DX
+    JC INPUT_ERROR
+
+    MOV BX, AX            ; 更新数值
+    INC CX                ; 字符数 + 1
+    JMP READ_CHAR_LOOP
+
+POP_AND_ERR:
+    POP AX
+
+INPUT_ERROR:
+    STC                   ; 设置 CF = 1 表示输入错误 (Chapter 8)
+    JMP RANGE_EXIT
+
+CHECK_RANGE:
+    CMP CX, 0             ; 未输任何字符直接按 Enter，报错
+    JE INPUT_ERROR
+
+    CMP BX, SI            ; 是否小于最小值 (Chapter 8 CMP/JB)
+    JB INPUT_ERROR
+    CMP BX, DI            ; 是否大于最大值 (Chapter 8 CMP/JA)
+    JA INPUT_ERROR
+
+    MOV AX, BX            ; 成功，AX 返回数值
+    CLC                   ; 清除标志位 CF = 0 (Chapter 8)
+
+RANGE_EXIT:
+    POP DI
+    POP SI
+    POP DX
+    POP CX
+    POP BX
+    RET
+M2_READ_NUM_RANGE ENDP
+
+
+; =========================================================
+; =========================================================
+; [MEMBER 2 WORK] - CALCULATION FUNCTIONS 1 & 2
+; 计算功能 1 (单利) 与 功能 2 (到期总额)
+; =========================================================
+; =========================================================
+
+; ---------------------------------------------------------
+; [MEMBER 2 WORK] - 功能 1: 单利计算
+; 算式: Interest = Principal * Rate * Months / 1200
+; ---------------------------------------------------------
+M2_CALC_SIMPLE_INTEREST_PROC PROC
+    PUSH AX
+    PUSH BX
+    PUSH DX
+
+    MOV AX, principal
+    MOV BX, rate
+    MUL BX                ; DX:AX = P * R (Chapter 7)
+
+    MOV BX, tenure_months
+    MUL BX                ; DX:AX = (P * R) * M
+
+    MOV BX, 1200D
+    DIV BX                ; AX = 商 (利息整数), DX = 余数
+
+    MOV simple_interest, AX
+    MOV int_rem, DX       ; 保存余数供小数点计算
+
+    POP DX
+    POP BX
+    POP AX
+    RET
+M2_CALC_SIMPLE_INTEREST_PROC ENDP
+
+
+; ---------------------------------------------------------
+; [MEMBER 2 WORK] - 功能 2: 到期总额计算
+; 算式: Total = Principal + Simple Interest
+; ---------------------------------------------------------
+M2_CALC_TOTAL_MATURITY_PROC PROC
+    PUSH AX
+    PUSH BX
+
+    MOV AX, principal
+    ADD AX, simple_interest
+    MOV total_maturity, AX
+
+    POP BX
+    POP AX
+    RET
+M2_CALC_TOTAL_MATURITY_PROC ENDP
+
+
+; =========================================================
+; =========================================================
+; [MEMBER 3 WORK] - ADVANCED CALCULATIONS & REPORT DISPLAY
+; (Member 3 的高级计算与格式化账单输出)
+; =========================================================
+; =========================================================
+
+M3_CALC_ADVANCED_PROC PROC
+    PUSH AX
+    PUSH BX
+    PUSH DX
+
+    ; [功能 3]: 扣税 Tax = Simple Interest * 10 / 100
+    MOV AX, simple_interest
+    MOV BX, 10D
+    MUL BX
+    MOV BX, 100D
+    DIV BX
+    MOV tax_deduction, AX
+
+    ; [功能 4]: 每月预估收益 Monthly Payout = (Simple Interest - Tax) / Months
+    MOV AX, simple_interest
+    SUB AX, tax_deduction
+    MOV DX, 0
+    MOV BX, tenure_months
+    CMP BX, 0
+    JE SKIP_DIV
+    DIV BX
+    MOV monthly_payout, AX
+    JMP M3_CALC_DONE
+
+SKIP_DIV:
+    MOV monthly_payout, 0
+
+M3_CALC_DONE:
+    POP DX
+    POP BX
+    POP AX
+    RET
+M3_CALC_ADVANCED_PROC ENDP
+
+
+M3_DISPLAY_SUMMARY_PROC PROC
+    PUSH AX
+    PUSH DX
+
+    MOV AH, 09H
+    LEA DX, title_bm
+    INT 21H
+
+    ; 1. 本金 (.00)
+    MOV AH, 09H
+    LEA DX, rpt_p
+    INT 21H
+    MOV AX, principal
+    CALL M3_PRINT_NUMBER
+    CALL PRINT_DOT_ZERO0
+
+    ; 2. 利率
+    MOV AH, 09H
+    LEA DX, rpt_r
+    INT 21H
+    MOV AX, rate
+    CALL M3_PRINT_NUMBER
+
+    ; 3. 期限
+    MOV AH, 09H
+    LEA DX, rpt_m
+    INT 21H
+    MOV AX, tenure_months
+    CALL M3_PRINT_NUMBER
+
+    ; 4. 利息 (带计算出的真实小数位)
+    MOV AH, 09H
+    LEA DX, rpt_f1
+    INT 21H
+    MOV AX, simple_interest
+    CALL M3_PRINT_NUMBER
+    
+    MOV AX, int_rem
+    MOV BX, 100D
+    MUL BX
+    MOV BX, 1200D
+    DIV BX
+    CALL PRINT_DECIMAL_PART
+
+    ; 5. 到期总额 (带相同的小数位)
+    MOV AH, 09H
+    LEA DX, rpt_f2
+    INT 21H
+    MOV AX, total_maturity
+    CALL M3_PRINT_NUMBER
+    
+    MOV AX, int_rem
+    MOV BX, 100D
+    MUL BX
+    MOV BX, 1200D
+    DIV BX
+    CALL PRINT_DECIMAL_PART
+
+    ; 6. 扣税 (.00)
+    MOV AH, 09H
+    LEA DX, rpt_f3
+    INT 21H
+    MOV AX, tax_deduction
+    CALL M3_PRINT_NUMBER
+    CALL PRINT_DOT_ZERO0
+
+    ; 7. 每月收益 (.00)
+    MOV AH, 09H
+    LEA DX, rpt_f4
+    INT 21H
+    MOV AX, monthly_payout
+    CALL M3_PRINT_NUMBER
+    CALL PRINT_DOT_ZERO0
+
+    MOV AH, 09H
+    LEA DX, nl
+    INT 21H
+
+    POP DX
+    POP AX
+    RET
+M3_DISPLAY_SUMMARY_PROC ENDP
+
+
+; ---------------------------------------------------------
+; 小数点与格式化辅助工具 (全部使用 AH=02H 单字符打印)
+; ---------------------------------------------------------
+PRINT_DOT_ZERO0 PROC
+    PUSH AX
+    PUSH DX
+    MOV AH, 02H
+    MOV DL, '.'
+    INT 21H
+    MOV DL, '0'
+    INT 21H
+    MOV DL, '0'
+    INT 21H
+    POP DX
+    POP AX
+    RET
+PRINT_DOT_ZERO0 ENDP
+
+PRINT_DECIMAL_PART PROC
+    PUSH AX
+    PUSH BX
+    PUSH DX
+
+    PUSH AX
+    MOV AH, 02H
+    MOV DL, '.'
+    INT 21H
+
+    POP AX
+    MOV BX, 10D
+    MOV DX, 0
+    DIV BX
+
+    PUSH DX
+    MOV DL, AL
+    ADD DL, '0'
+    MOV AH, 02H
+    INT 21H
+
+    POP DX
+    ADD DL, '0'
+    MOV AH, 02H
+    INT 21H
+
+    POP DX
+    POP BX
+    POP AX
+    RET
+PRINT_DECIMAL_PART ENDP
+
+M3_PRINT_NUMBER PROC
+    PUSH AX
+    PUSH BX
+    PUSH CX
+    PUSH DX
+    PUSH SI
+
+    CMP AX, 0
+    JNE CONVERT_NUM
+    MOV DL, '0'
+    MOV AH, 02H
+    INT 21H
+    JMP PRINT_DONE
+
+CONVERT_NUM:
+    MOV BX, 10D
+    MOV SI, 0
+
+CONVERT_LOOP:
+    MOV DX, 0
+    DIV BX
+    MOV digits[SI], DL
+    INC SI
+    CMP AX, 0
+    JNE CONVERT_LOOP
+
+PRINT_LOOP:
+    DEC SI
+    MOV DL, digits[SI]
+    ADD DL, '0'
+    MOV AH, 02H
+    INT 21H
+    CMP SI, 0
+    JNE PRINT_LOOP
+
+PRINT_DONE:
+    POP SI
+    POP DX
+    POP CX
+    POP BX
+    POP AX
+    RET
+M3_PRINT_NUMBER ENDP
+
+END MAIN
