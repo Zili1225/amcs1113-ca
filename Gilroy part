@@ -1,1 +1,659 @@
+.MODEL SMALL
+.STACK 100
 
+.DATA
+
+; ==========================================
+; BANK ACCOUNT DATA
+; ==========================================
+
+accountID       DB  "A001", '$'
+
+; Principal = user input
+principal       DW  0
+
+; Default annual interest rate = 5%
+rate            DW  5
+
+; Number of months = user input
+months          DW  0
+
+
+; ==========================================
+; CALCULATION RESULTS
+; ==========================================
+
+; Money results stored in CENTS
+;
+; Example:
+; 41666 = RM416.66
+; 4166  = RM41.66
+
+totalInterest   DW  0
+taxDeduction    DW  0
+netInterest     DW  0
+monthlyPayout   DW  0
+
+
+; ==========================================
+; BUFFER
+; ==========================================
+
+DIGITS          DB  6 DUP(?)
+
+
+; ==========================================
+; MESSAGES
+; ==========================================
+
+TITLEBM         DB  "   ======= BANK ACCOUNT SUMMARY =======", '$'
+
+INPUTPRINCIPAL  DB  0DH,0AH
+                DB  "Enter Principal Amount (RM): $"
+
+INPUTMONTHS     DB  0DH,0AH
+                DB  "Enter Number of Months: $"
+
+PRINCIPALM      DB  0DH,0AH
+                DB  "     Principal Amount : RM $"
+
+SIMINTM         DB  0DH,0AH
+                DB  "     Total Interest   : RM $"
+
+TAXM            DB  0DH,0AH
+                DB  "     Tax (10%)        : RM $"
+
+NETM            DB  0DH,0AH
+                DB  "     Net Interest     : RM $"
+
+MONTHM          DB  0DH,0AH
+                DB  "     Monthly Payout   : RM $"
+
+NL              DB  0DH,0AH,"$"
+
+
+.CODE
+
+MAIN PROC
+
+    MOV AX, @DATA
+    MOV DS, AX
+
+
+    ; ======================================
+    ; USER INPUT
+    ; ======================================
+
+    CALL GetUserInput
+
+
+    ; ======================================
+    ; CALCULATE INTEREST
+    ; ======================================
+
+    CALL CalculateInterest
+
+
+    ; ======================================
+    ; DISPLAY BANK SUMMARY
+    ; ======================================
+
+    CALL BankAccountSummary
+
+
+    ; ======================================
+    ; EXIT PROGRAM
+    ; ======================================
+
+    MOV AH, 4CH
+    INT 21H
+
+MAIN ENDP
+
+
+
+; =========================================================
+; FUNCTION: GetUserInput
+;
+; User only enters:
+; 1. Principal
+; 2. Number of Months
+;
+; Interest Rate is fixed at 5%
+; =========================================================
+
+GetUserInput PROC
+
+
+    ; ---------------------------------------
+    ; Input Principal
+    ; ---------------------------------------
+
+    MOV AH, 09H
+    LEA DX, INPUTPRINCIPAL
+    INT 21H
+
+    CALL ReadNumber
+
+    MOV principal, AX
+
+
+    ; ---------------------------------------
+    ; Input Number of Months
+    ; ---------------------------------------
+
+    MOV AH, 09H
+    LEA DX, INPUTMONTHS
+    INT 21H
+
+    CALL ReadNumber
+
+    MOV months, AX
+
+
+    RET
+
+GetUserInput ENDP
+
+
+
+; =========================================================
+; FUNCTION: ReadNumber
+;
+; Read integer from keyboard
+;
+; Example:
+;
+; User enters: 10000
+;
+; AX = 10000
+;
+; Press ENTER to finish
+; =========================================================
+
+ReadNumber PROC
+
+    XOR BX, BX
+
+
+ReadLoop:
+
+    MOV AH, 01H
+    INT 21H
+
+
+    ; Check ENTER
+
+    CMP AL, 0DH
+    JE ReadDone
+
+
+    ; Convert ASCII to number
+
+    SUB AL, '0'
+
+    XOR AH, AH
+
+
+    ; Save digit
+
+    MOV SI, AX
+
+
+    ; BX = BX x 10
+
+    MOV AX, BX
+
+    MOV DX, 10
+
+    MUL DX
+
+
+    ; Add new digit
+
+    ADD AX, SI
+
+    MOV BX, AX
+
+
+    JMP ReadLoop
+
+
+ReadDone:
+
+    MOV AX, BX
+
+    RET
+
+ReadNumber ENDP
+
+
+
+; =========================================================
+; FUNCTION: CalculateInterest
+;
+; Rate = DEFAULT 5%
+;
+; Formula:
+;
+; Total Interest
+; = Principal x Rate x Months / 12
+;
+; Result stored in CENTS
+;
+; Example:
+;
+; Principal = RM10000
+; Rate = 5%
+; Months = 10
+;
+; 10000 x 5 x 10 / 12
+; = 41666 cents
+; = RM416.66
+; =========================================================
+ 
+CalculateInterest PROC
+
+    ; ---------------------------------------
+    ; Calculate Total Interest
+    ;
+    ; Principal x 5%
+    ;
+    ; Example:
+    ; 10000 x 5 = 50000
+    ;
+    ; 50000 cents = RM500.00
+    ; ---------------------------------------
+
+    MOV AX, principal
+
+    MOV BX, rate
+
+    MUL BX
+
+    MOV totalInterest, AX
+
+
+    ; ---------------------------------------
+    ; Calculate Tax = 10%
+    ; ---------------------------------------
+
+    MOV AX, totalInterest
+
+    MOV BX, 10
+
+    XOR DX, DX
+
+    DIV BX
+
+    MOV taxDeduction, AX
+
+
+    ; ---------------------------------------
+    ; Calculate Net Interest
+    ; ---------------------------------------
+
+    MOV AX, totalInterest
+
+    SUB AX, taxDeduction
+
+    MOV netInterest, AX
+
+
+    ; ---------------------------------------
+    ; Calculate Monthly Payout
+    ;
+    ; Net Interest / Months
+    ; ---------------------------------------
+
+    MOV AX, netInterest
+
+    XOR DX, DX
+
+    MOV BX, months
+
+    DIV BX
+
+    MOV monthlyPayout, AX
+
+    RET
+
+CalculateInterest ENDP
+
+
+
+; =========================================================
+; FUNCTION: BankAccountSummary
+;
+; Display ONLY:
+;
+; Principal Amount
+; Total Interest
+; Tax
+; Net Interest
+; Monthly Payout
+; =========================================================
+
+BankAccountSummary PROC
+
+
+    ; ---------------------------------------
+    ; Display Title
+    ; ---------------------------------------
+
+    MOV AH, 09H
+    LEA DX, TITLEBM
+    INT 21H
+
+
+    ; ---------------------------------------
+    ; Display Principal Amount
+    ; ---------------------------------------
+
+    MOV AH, 09H
+    LEA DX, PRINCIPALM
+    INT 21H
+
+    MOV AX, principal
+
+    CALL PrintNumber
+
+
+    ; Display .00
+
+    MOV DL, '.'
+    MOV AH, 02H
+    INT 21H
+
+    MOV DL, '0'
+    MOV AH, 02H
+    INT 21H
+
+    MOV DL, '0'
+    MOV AH, 02H
+    INT 21H
+
+
+    ; ---------------------------------------
+    ; Display Total Interest
+    ; ---------------------------------------
+
+    MOV AH, 09H
+    LEA DX, SIMINTM
+    INT 21H
+
+    MOV AX, totalInterest
+
+    CALL PrintMoney
+
+
+    ; ---------------------------------------
+    ; Display Tax
+    ; ---------------------------------------
+
+    MOV AH, 09H
+    LEA DX, TAXM
+    INT 21H
+
+    MOV AX, taxDeduction
+
+    CALL PrintMoney
+
+
+    ; ---------------------------------------
+    ; Display Net Interest
+    ; ---------------------------------------
+
+    MOV AH, 09H
+    LEA DX, NETM
+    INT 21H
+
+    MOV AX, netInterest
+
+    CALL PrintMoney
+
+
+    ; ---------------------------------------
+    ; Display Monthly Payout
+    ; ---------------------------------------
+
+    MOV AH, 09H
+    LEA DX, MONTHM
+    INT 21H
+
+    MOV AX, monthlyPayout
+
+    CALL PrintMoney
+
+
+    ; ---------------------------------------
+    ; New Line
+    ; ---------------------------------------
+
+    MOV AH, 09H
+    LEA DX, NL
+    INT 21H
+
+
+    RET
+
+BankAccountSummary ENDP
+
+
+
+; =========================================================
+; FUNCTION: PrintMoney
+;
+; Input:
+; AX = amount in CENTS
+;
+; Example:
+;
+; AX = 41666
+;
+; Output:
+;
+; 416.66
+; =========================================================
+
+PrintMoney PROC
+
+
+    ; ---------------------------------------
+    ; Divide by 100
+    ; ---------------------------------------
+
+    XOR DX, DX
+
+    MOV BX, 100
+
+    DIV BX
+
+    ; AX = whole number
+    ; DX = decimal part
+
+
+    ; Save decimal part
+
+    MOV DI, DX
+
+
+    ; ---------------------------------------
+    ; Print whole number
+    ; ---------------------------------------
+
+    CALL PrintNumber
+
+
+    ; ---------------------------------------
+    ; Print decimal point
+    ; ---------------------------------------
+
+    MOV DL, '.'
+
+    MOV AH, 02H
+
+    INT 21H
+
+
+    ; ---------------------------------------
+    ; Print two decimal digits
+    ; ---------------------------------------
+
+    MOV AX, DI
+
+    CALL PrintTwoDigits
+
+
+    RET
+
+PrintMoney ENDP
+
+
+
+; =========================================================
+; FUNCTION: PrintNumber
+;
+; Input:
+; AX = integer
+;
+; Example:
+;
+; AX = 12345
+;
+; Output:
+;
+; 12345
+;
+; No PUSH / POP
+; =========================================================
+
+PrintNumber PROC
+
+
+    CMP AX, 0
+
+    JNE ConvertNumber
+
+
+    MOV DL, '0'
+
+    MOV AH, 02H
+
+    INT 21H
+
+    RET
+
+
+
+ConvertNumber:
+
+    MOV BX, 10
+
+    MOV SI, 0
+
+
+ConvertLoop:
+
+    XOR DX, DX
+
+    DIV BX
+
+    MOV DIGITS[SI], DL
+
+    INC SI
+
+    CMP AX, 0
+
+    JNE ConvertLoop
+
+
+
+PrintLoop:
+
+    DEC SI
+
+    MOV DL, DIGITS[SI]
+
+    ADD DL, '0'
+
+    MOV AH, 02H
+
+    INT 21H
+
+    CMP SI, 0
+
+    JNE PrintLoop
+
+
+    RET
+
+PrintNumber ENDP
+
+
+
+; =========================================================
+; FUNCTION: PrintTwoDigits
+;
+; Input:
+; AX = 0 - 99
+;
+; Example:
+;
+; AX = 5
+; Output = 05
+;
+; AX = 66
+; Output = 66
+; =========================================================
+
+PrintTwoDigits PROC
+
+
+    XOR DX, DX
+
+    MOV BX, 10
+
+    DIV BX
+
+    ; AX = tens
+    ; DX = ones
+
+
+    ; Save ones digit
+
+    MOV SI, DX
+
+
+    ; ---------------------------------------
+    ; Print tens digit
+    ; ---------------------------------------
+
+    ADD AL, '0'
+
+    MOV DL, AL
+
+    MOV AH, 02H
+
+    INT 21H
+
+
+    ; ---------------------------------------
+    ; Print ones digit
+    ; ---------------------------------------
+
+    MOV DX, SI
+
+    ADD DL, '0'
+
+    MOV AH, 02H
+
+    INT 21H
+
+
+    RET
+
+PrintTwoDigits ENDP
+
+
+END MAIN
