@@ -1,29 +1,23 @@
 .MODEL SMALL
-.STACK 200H
+.STACK 100H
 
 .DATA
 
 ; =========================================================
 ; [MEMBER 2 WORK] - DATA DECLARATIONS (数据声明)
 ; =========================================================
-    ; 32 位常量：999,999 (0F423FH)
-    MAX_PRINCIPAL_LOW   EQU 423FH   ; 999,999 的低 16 位
-    MAX_PRINCIPAL_HIGH  EQU 000FH   ; 999,999 的高 16 位
+    MAX_PRINCIPAL   EQU 9999D     ; 本金上限 RM 9999
+    MAX_RATE        EQU 99D       ; 利率上限 99%
+    MAX_TENURE      EQU 99D       ; 期限上限 99个月
 
-    MAX_RATE            EQU 99D     ; 利率上限 99%
-    MAX_TENURE          EQU 99D     ; 期限上限 99 个月
-
-    ; 32 位数据变量 (使用 DD 定义，单位: RM)
-    PRINCIPAL           DD 0        ; 本金 (RM 1 - 999999)
-    SIMPLE_INTEREST     DD 0        ; [功能1] 单利利息 (RM)
-    TOTAL_MATURITY      DD 0        ; [功能2] 到期总额 (RM)
-
-    ; 16 位数据变量
-    RATE                DW 0        ; 年利率 (%)
-    TENURE_MONTHS       DW 0        ; 存款期限 (月)
+    PRINCIPAL       DW 0          ; 本金 (RM)
+    RATE            DW 0          ; 年利率 (%)
+    TENURE_MONTHS   DW 0          ; 存款期限 (月)
+    SIMPLE_INTEREST DW 0          ; [功能1] 单利利息 (RM)
+    TOTAL_MATURITY  DW 0          ; [功能2] 到期总额 (RM)
 
     ; Member 2 输入提示与错误信息
-    STR_P       DB 0DH, 0AH, "ENTER PRINCIPAL AMOUNT (RM 1-999999): $"
+    STR_P       DB 0DH, 0AH, "ENTER PRINCIPAL AMOUNT (RM 1-9999): $"
     STR_R       DB 0DH, 0AH, "ENTER ANNUAL RATE % (1-99): $"
     STR_M       DB 0DH, 0AH, "ENTER TENURE IN MONTHS (1-99): $"
     STR_ERR     DB 0DH, 0AH, "INVALID INPUT OR OUT OF RANGE! PLEASE TRY AGAIN.$"
@@ -32,9 +26,9 @@
 ; =========================================================
 ; [MEMBER 3 WORK] - DATA DECLARATIONS
 ; =========================================================
-    TAX_DEDUCTION   DD 0            ; [功能3] 扣税 10%
-    NET_INTEREST    DD 0            ; 税后净利息
-    MONTHLY_PAYOUT  DD 0            ; [功能4] 每月预估收益
+    TAX_DEDUCTION   DW 0          ; [功能3] 扣税 10%
+    NET_INTEREST    DW 0          ; 税后净利息
+    MONTHLY_PAYOUT  DW 0          ; [功能4] 每月预估收益
 
     TITLE_BM    DB 0DH, 0AH, "========================================"
                 DB 0DH, 0AH, "      BANK ACCOUNT SUMMARY REPORT       "
@@ -47,6 +41,8 @@
     RPT_F3      DB 0DH, 0AH, "  TAX DEDUCTION(10%): RM $"
     RPT_F4      DB 0DH, 0AH, "  MONTHLY PAYOUT   : RM $"
     NL          DB 0DH, 0AH, "$"
+
+    DIGITS      DB 6 DUP(?)       ; 数字打印缓冲区
 
 .CODE
 
@@ -94,18 +90,11 @@ GET_P:
     LEA DX, STR_P
     INT 21H
     
-    ; 范围限制: Min = 1, Max = 999,999
-    MOV CX, 1                       ; Low Min
-    MOV BX, 0                       ; High Min
-    MOV SI, MAX_PRINCIPAL_LOW       ; Low Max (423FH)
-    MOV DI, MAX_PRINCIPAL_HIGH      ; High Max (000FH)
-
-    CALL M2_READ_NUM_RANGE32
-    JC ERR_P                        ; 如果 CF=1 代表输入错误，重试
-    
-    ; 保存 32 位本金
-    MOV WORD PTR PRINCIPAL[0], AX   ; 低 16 位
-    MOV WORD PTR PRINCIPAL[2], DX   ; 高 16 位
+    MOV CX, 1              ; 最小值 = 1
+    MOV DX, MAX_PRINCIPAL  ; 最大值 = 9999
+    CALL M2_READ_NUM_RANGE
+    JC ERR_P               ; 如果 CF=1 代表输入错误，重试
+    MOV PRINCIPAL, AX
     JMP GET_R
 
 ERR_P:
@@ -121,7 +110,7 @@ GET_R:
     
     MOV CX, 1              ; 最小值 = 1
     MOV DX, MAX_RATE       ; 最大值 = 99
-    CALL M2_READ_NUM_RANGE16
+    CALL M2_READ_NUM_RANGE
     JC ERR_R
     MOV RATE, AX
     JMP GET_M
@@ -139,7 +128,7 @@ GET_M:
     
     MOV CX, 1              ; 最小值 = 1
     MOV DX, MAX_TENURE     ; 最大值 = 99
-    CALL M2_READ_NUM_RANGE16
+    CALL M2_READ_NUM_RANGE
     JC ERR_M
     MOV TENURE_MONTHS, AX
     JMP INPUT_DONE
@@ -160,133 +149,12 @@ M2_INPUT_DATA_PROC ENDP
 
 
 ; ---------------------------------------------------------
-; [MEMBER 2 WORK] - M2_READ_NUM_RANGE32
-; 32 位数字读取与范围检测工具 (支持最大 999,999)
-; 入口: CX:BX = MIN, DI:SI = MAX
-; 出口: DX:AX = 32位数值 | CF=0 (成功), CF=1 (失败)
+; [MEMBER 2 WORK] - READ_NUM_RANGE
+; 键盘读取与范围检测通用工具 (简单且严谨的学生写法)
+; 入口: CX = MIN, DX = MAX
+; 出口: AX = 转换为整数的数值 | CF=0 (成功), CF=1 (失败)
 ; ---------------------------------------------------------
-M2_READ_NUM_RANGE32 PROC
-    PUSH BX
-    PUSH CX
-    PUSH BP
-
-    ; 用栈区域保存临时变量
-    SUB SP, 10
-    MOV BP, SP
-
-    ; [BP+0]: Min Low, [BP+2]: Min High
-    MOV [BP+0], CX
-    MOV [BP+2], BX
-    ; [BP+4]: Max Low, [BP+6]: Max High
-    MOV [BP+4], SI
-    MOV [BP+6], DI
-    ; [BP+8]: 字符计数器
-    MOV WORD PTR [BP+8], 0
-
-    ; 初始化 32 位累加器 (DX:AX = 0)
-    XOR AX, AX
-    XOR DX, DX
-
-READ_32_LOOP:
-    PUSH AX
-    PUSH DX
-
-    MOV AH, 01H
-    INT 21H
-
-    CMP AL, 0DH
-    JE CHECK_32_RANGE
-
-    CMP AL, '0'
-    JB INPUT_32_ERR_POP2
-    CMP AL, '9'
-    JA INPUT_32_ERR_POP2
-
-    SUB AL, '0'
-    MOV CL, AL
-    MOV CH, 0             ; CX = 新输入数字
-
-    POP DX
-    POP AX
-
-    ; DX:AX = DX:AX * 10 + CX
-    ; 1. AX * 10
-    PUSH CX
-    MOV CX, 10D
-    PUSH DX
-    MUL CX                ; DX:AX = Low * 10
-    MOV SI, AX
-    MOV DI, DX
-
-    POP AX                ; 原高位 DX
-    MUL CX                ; High * 10
-    ADD DX, DI            ; 检查高位溢出
-    JNC NO_OV1
-    POP CX
-    JMP INPUT_32_ERR
-
-NO_OV1:
-    MOV DX, AX
-    MOV AX, SI
-    POP CX                ; 还原新数字
-
-    ; 2. + CX
-    ADD AX, CX
-    ADC DX, 0
-    JC INPUT_32_ERR
-
-    INC WORD PTR [BP+8]   ; 字符数 + 1
-    JMP READ_32_LOOP
-
-INPUT_32_ERR_POP2:
-    POP DX
-    POP AX
-
-INPUT_32_ERR:
-    ADD SP, 10
-    POP BP
-    POP CX
-    POP BX
-    STC
-    RET
-
-CHECK_32_RANGE:
-    POP DX
-    POP AX
-
-    CMP WORD PTR [BP+8], 0 ; 未输入字符按 Enter
-    JE INPUT_32_ERR
-
-    ; 检查低于最小值 Min
-    CMP DX, [BP+2]
-    JB INPUT_32_ERR
-    JA CHK_MAX
-    CMP AX, [BP+0]
-    JB INPUT_32_ERR
-
-CHK_MAX:
-    ; 检查高于最大值 Max
-    CMP DX, [BP+6]
-    JA INPUT_32_ERR
-    JB RANGE_32_OK
-    CMP AX, [BP+4]
-    JA INPUT_32_ERR
-
-RANGE_32_OK:
-    ADD SP, 10
-    POP BP
-    POP CX
-    POP BX
-    CLC
-    RET
-M2_READ_NUM_RANGE32 ENDP
-
-
-; ---------------------------------------------------------
-; [MEMBER 2 WORK] - M2_READ_NUM_RANGE16
-; 16 位整数读取工具 (用于 Rate 和 Months)
-; ---------------------------------------------------------
-M2_READ_NUM_RANGE16 PROC
+M2_READ_NUM_RANGE PROC
     PUSH BX
     PUSH CX
     PUSH DX
@@ -298,61 +166,63 @@ M2_READ_NUM_RANGE16 PROC
     MOV BX, 0             ; BX 作为数值累加器
     MOV CX, 0             ; CX 记录输入字符个数
 
-R16_LOOP:
-    MOV AH, 01H
+READ_CHAR_LOOP:
+    MOV AH, 01H           ; 单字符带回显读取 (Chapter 4)
     INT 21H
 
-    CMP AL, 0DH
-    JE R16_CHECK
+    CMP AL, 0DH           ; 检查 Enter 键 (0DH)
+    JE CHECK_RANGE
 
-    CMP AL, '0'
-    JB R16_ERR
-    CMP AL, '9'
-    JA R16_ERR
+    CMP AL, '0'           ; 小于 '0' 则非法
+    JB INPUT_ERROR
+    CMP AL, '9'           ; 大于 '9' 则非法
+    JA INPUT_ERROR
 
-    SUB AL, '0'
+    SUB AL, '0'           ; ASCII 转数值
     MOV AH, 0
-    PUSH AX
+    PUSH AX               ; 压栈保存新输入的数字
 
+    ; BX = BX * 10
     MOV AX, BX
     MOV DX, 10D
     MUL DX
-    JC R16_ERR_POP
+    JC POP_AND_ERR        ; 溢出检查
 
     POP DX
-    ADD AX, DX
-    JC R16_ERR
+    ADD AX, DX            ; AX = (BX * 10) + 新数字
+    JC INPUT_ERROR        ; 进位溢出检查
 
-    MOV BX, AX
-    INC CX
-    JMP R16_LOOP
+    MOV BX, AX            ; 更新累加数值
+    INC CX                ; 字符数计数 + 1
+    JMP READ_CHAR_LOOP
 
-R16_ERR_POP:
-    POP AX
-R16_ERR:
-    STC
-    JMP R16_EXIT
+POP_AND_ERR:
+    POP AX                ; 恢复堆栈平衡
 
-R16_CHECK:
-    CMP CX, 0
-    JE R16_ERR
+INPUT_ERROR:
+    STC                   ; 设置 CF = 1 表示输入错误
+    JMP RANGE_EXIT
 
-    CMP BX, SI
-    JB R16_ERR
-    CMP BX, DI
-    JA R16_ERR
+CHECK_RANGE:
+    CMP CX, 0             ; 如果未输入任何字符直接 Enter，报错
+    JE INPUT_ERROR
 
-    MOV AX, BX
-    CLC
+    CMP BX, SI            ; 是否小于最小值
+    JB INPUT_ERROR
+    CMP BX, DI            ; 是否大于最大值
+    JA INPUT_ERROR
 
-R16_EXIT:
+    MOV AX, BX            ; 成功，结果存入 AX
+    CLC                   ; 设置 CF = 0 表示成功
+
+RANGE_EXIT:
     POP DI
     POP SI
     POP DX
     POP CX
     POP BX
     RET
-M2_READ_NUM_RANGE16 ENDP
+M2_READ_NUM_RANGE ENDP
 
 
 ; =========================================================
@@ -363,67 +233,27 @@ M2_READ_NUM_RANGE16 ENDP
 ; =========================================================
 
 ; ---------------------------------------------------------
-; [MEMBER 2 WORK] - 功能 1: 单利计算 (支持 32 位本金)
+; [MEMBER 2 WORK] - 功能 1: 单利计算
 ; 公式: Interest = Principal * Rate * Months / 1200
 ; ---------------------------------------------------------
 M2_CALC_SIMPLE_INTEREST_PROC PROC
     PUSH AX
     PUSH BX
-    PUSH CX
     PUSH DX
 
-    ; 1. DX:AX = Principal
-    MOV AX, WORD PTR PRINCIPAL[0]
-    MOV DX, WORD PTR PRINCIPAL[2]
-
-    ; 2. DX:AX = Principal * Rate
+    MOV AX, PRINCIPAL
     MOV BX, RATE
-    PUSH DX
-    MUL BX                ; AX * Rate -> DX:AX
-    MOV SI, AX
-    MOV DI, DX
-    POP AX
-    MUL BX                ; DX * Rate -> DX:AX
-    ADD AX, DI
-    MOV DX, AX
-    MOV AX, SI            ; DX:AX = Principal * Rate
+    MUL BX                ; DX:AX = P * R
 
-    ; 3. DX:AX = (Principal * Rate) * Months
     MOV BX, TENURE_MONTHS
-    PUSH DX
-    MUL BX
-    MOV SI, AX
-    MOV DI, DX
-    POP AX
-    MUL BX
-    ADD AX, DI
-    MOV DX, AX
-    MOV AX, SI            ; DX:AX = (P * R * M)
+    MUL BX                ; DX:AX = (P * R) * M
 
-    ; 4. DX:AX / 1200
     MOV BX, 1200D
-    ; 简易 32位 / 16位 除法逻辑
-    CMP DX, BX
-    JAE HIGH_DIV
-    DIV BX                ; 商在 AX，余数在 DX
-    MOV WORD PTR SIMPLE_INTEREST[0], AX
-    MOV WORD PTR SIMPLE_INTEREST[2], 0
-    JMP CALC1_DONE
+    DIV BX                ; AX = (P * R * M) / 1200
 
-HIGH_DIV:
-    ; 大数高位除法处理
-    PUSH AX
-    MOV AX, DX
-    XOR DX, DX
-    DIV BX                ; 高位商
-    MOV WORD PTR SIMPLE_INTEREST[2], AX
-    POP AX
-    DIV BX                ; 低位商
-    MOV WORD PTR SIMPLE_INTEREST[0], AX
+    MOV SIMPLE_INTEREST, AX
 
-CALC1_DONE:
     POP DX
-    POP CX
     POP BX
     POP AX
     RET
@@ -431,23 +261,18 @@ M2_CALC_SIMPLE_INTEREST_PROC ENDP
 
 
 ; ---------------------------------------------------------
-; [MEMBER 2 WORK] - 功能 2: 到期总额计算 (32位加法)
+; [MEMBER 2 WORK] - 功能 2: 到期总额计算
 ; 公式: Total = Principal + Simple Interest
 ; ---------------------------------------------------------
 M2_CALC_TOTAL_MATURITY_PROC PROC
     PUSH AX
-    PUSH DX
+    PUSH BX
 
-    MOV AX, WORD PTR PRINCIPAL[0]
-    MOV DX, WORD PTR PRINCIPAL[2]
+    MOV AX, PRINCIPAL
+    ADD AX, SIMPLE_INTEREST
+    MOV TOTAL_MATURITY, AX
 
-    ADD AX, WORD PTR SIMPLE_INTEREST[0]
-    ADC DX, WORD PTR SIMPLE_INTEREST[2]
-
-    MOV WORD PTR TOTAL_MATURITY[0], AX
-    MOV WORD PTR TOTAL_MATURITY[2], DX
-
-    POP DX
+    POP BX
     POP AX
     RET
 M2_CALC_TOTAL_MATURITY_PROC ENDP
@@ -466,34 +291,30 @@ M3_CALC_ADVANCED_PROC PROC
     PUSH DX
 
     ; [功能 3]: 扣税 Tax = Simple Interest * 10 / 100
-    MOV AX, WORD PTR SIMPLE_INTEREST[0]
+    MOV AX, SIMPLE_INTEREST
     MOV BX, 10D
     MUL BX
     MOV BX, 100D
     DIV BX
-    MOV WORD PTR TAX_DEDUCTION[0], AX
-    MOV WORD PTR TAX_DEDUCTION[2], 0
+    MOV TAX_DEDUCTION, AX
 
     ; 税后净利息 Net Interest = Simple Interest - Tax
-    MOV AX, WORD PTR SIMPLE_INTEREST[0]
-    SUB AX, WORD PTR TAX_DEDUCTION[0]
-    MOV WORD PTR NET_INTEREST[0], AX
-    MOV WORD PTR NET_INTEREST[2], 0
+    MOV AX, SIMPLE_INTEREST
+    SUB AX, TAX_DEDUCTION
+    MOV NET_INTEREST, AX
 
     ; [功能 4]: 每月预估收益 Monthly Payout = Net Interest / Months
-    MOV AX, WORD PTR NET_INTEREST[0]
+    MOV AX, NET_INTEREST
     MOV DX, 0
     MOV BX, TENURE_MONTHS
     CMP BX, 0
     JE SKIP_DIV
     DIV BX
-    MOV WORD PTR MONTHLY_PAYOUT[0], AX
-    MOV WORD PTR MONTHLY_PAYOUT[2], 0
+    MOV MONTHLY_PAYOUT, AX
     JMP M3_CALC_DONE
 
 SKIP_DIV:
-    MOV WORD PTR MONTHLY_PAYOUT[0], 0
-    MOV WORD PTR MONTHLY_PAYOUT[2], 0
+    MOV MONTHLY_PAYOUT, 0
 
 M3_CALC_DONE:
     POP DX
@@ -514,49 +335,44 @@ M3_DISPLAY_SUMMARY_PROC PROC
     MOV AH, 09H
     LEA DX, RPT_P
     INT 21H
-    MOV AX, WORD PTR PRINCIPAL[0]
-    MOV DX, WORD PTR PRINCIPAL[2]
-    CALL M2_PRINT_NUM32
+    MOV AX, PRINCIPAL
+    CALL M3_PRINT_NUMBER
 
     MOV AH, 09H
     LEA DX, RPT_R
     INT 21H
     MOV AX, RATE
-    CALL M2_PRINT_NUM16
+    CALL M3_PRINT_NUMBER
 
     MOV AH, 09H
     LEA DX, RPT_M
     INT 21H
     MOV AX, TENURE_MONTHS
-    CALL M2_PRINT_NUM16
+    CALL M3_PRINT_NUMBER
 
     MOV AH, 09H
     LEA DX, RPT_F1
     INT 21H
-    MOV AX, WORD PTR SIMPLE_INTEREST[0]
-    MOV DX, WORD PTR SIMPLE_INTEREST[2]
-    CALL M2_PRINT_NUM32
+    MOV AX, SIMPLE_INTEREST
+    CALL M3_PRINT_NUMBER
 
     MOV AH, 09H
     LEA DX, RPT_F2
     INT 21H
-    MOV AX, WORD PTR TOTAL_MATURITY[0]
-    MOV DX, WORD PTR TOTAL_MATURITY[2]
-    CALL M2_PRINT_NUM32
+    MOV AX, TOTAL_MATURITY
+    CALL M3_PRINT_NUMBER
 
     MOV AH, 09H
     LEA DX, RPT_F3
     INT 21H
-    MOV AX, WORD PTR TAX_DEDUCTION[0]
-    MOV DX, WORD PTR TAX_DEDUCTION[2]
-    CALL M2_PRINT_NUM32
+    MOV AX, TAX_DEDUCTION
+    CALL M3_PRINT_NUMBER
 
     MOV AH, 09H
     LEA DX, RPT_F4
     INT 21H
-    MOV AX, WORD PTR MONTHLY_PAYOUT[0]
-    MOV DX, WORD PTR MONTHLY_PAYOUT[2]
-    CALL M2_PRINT_NUM32
+    MOV AX, MONTHLY_PAYOUT
+    CALL M3_PRINT_NUMBER
 
     MOV AH, 09H
     LEA DX, NL
@@ -569,93 +385,50 @@ M3_DISPLAY_SUMMARY_PROC ENDP
 
 
 ; ---------------------------------------------------------
-; 32 位通用数字打印工具 (支持打印最大 999,999)
-; 入口: DX:AX = 32位整数
+; [MEMBER 3 WORK] - 多位数字通用打印工具
 ; ---------------------------------------------------------
-M2_PRINT_NUM32 PROC
+M3_PRINT_NUMBER PROC
     PUSH AX
     PUSH BX
     PUSH CX
     PUSH DX
-
-    MOV CX, 0             ; 压栈计数器
-    MOV BX, 10D
-
-P32_LOOP:
-    ; DX:AX / 10
-    PUSH AX
-    MOV AX, DX
-    XOR DX, DX
-    DIV BX
-    MOV DI, AX            ; 商的高 16 位
-    POP AX
-    DIV BX                ; 商的低 16 位在 AX，余数在 DX
-
-    PUSH DX               ; 余数入栈
-    INC CX
-    MOV DX, DI            ; 还原商的高 16 位
-
-    ; 判断 DX:AX 是否为 0
-    CMP AX, 0
-    JNE P32_LOOP
-    CMP DX, 0
-    JNE P32_LOOP
-
-P32_PRINT:
-    POP DX
-    ADD DL, '0'
-    MOV AH, 02H
-    INT 21H
-    LOOP P32_PRINT
-
-    POP DX
-    POP CX
-    POP BX
-    POP AX
-    RET
-M2_PRINT_NUM32 ENDP
-
-
-; ---------------------------------------------------------
-; 16 位数字打印工具
-; ---------------------------------------------------------
-M2_PRINT_NUM16 PROC
-    PUSH AX
-    PUSH BX
-    PUSH CX
-    PUSH DX
-
-    MOV BX, 10D
-    MOV CX, 0
+    PUSH SI
 
     CMP AX, 0
-    JNE P16_DIV
+    JNE CONVERT_NUM
     MOV DL, '0'
     MOV AH, 02H
     INT 21H
-    JMP P16_DONE
+    JMP PRINT_DONE
 
-P16_DIV:
+CONVERT_NUM:
+    MOV BX, 10D
+    MOV SI, 0
+
+CONVERT_LOOP:
     MOV DX, 0
     DIV BX
-    PUSH DX
-    INC CX
+    MOV DIGITS[SI], DL
+    INC SI
     CMP AX, 0
-    JNE P16_DIV
+    JNE CONVERT_LOOP
 
-P16_PRINT:
-    POP DX
+PRINT_LOOP:
+    DEC SI
+    MOV DL, DIGITS[SI]
     ADD DL, '0'
     MOV AH, 02H
     INT 21H
-    LOOP P16_PRINT
+    CMP SI, 0
+    JNE PRINT_LOOP
 
-P16_DONE:
+PRINT_DONE:
+    POP SI
     POP DX
     POP CX
     POP BX
     POP AX
     RET
-M2_PRINT_NUM16 ENDP
+M3_PRINT_NUMBER ENDP
 
 END MAIN
