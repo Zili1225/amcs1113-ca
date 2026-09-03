@@ -3,8 +3,8 @@
 
 .DATA
     ; ===== Member 1: Login & Navigation Variables =====
-    sys_user        DB 'admin$'
-    sys_pass        DB '1234$'
+    sys_user        DB 'user$'          ; 修改为普通客户用户名
+    sys_pass        DB '1234$'          ; 客户登录密码
     user_id         DB 11 DUP('$')
     user_pass       DB 5 DUP('$')
     menu_choice     DB 0
@@ -24,14 +24,16 @@
     ; ===== Input Validation Buffer =====
     input_buffer    DB 6, ?, 6 DUP('$')
 
-    ; ===== Member 1: 界面文本 =====
-    m_title   DB 0DH, 0AH, "=== BANK INTEREST SYSTEM ===", 0DH, 0AH, "$"
-    m_uPrompt DB 0DH, 0AH, "Enter Username: $"
-    m_pPrompt DB 0DH, 0AH, "Enter Password: $"
-    m_ok      DB 0DH, 0AH, "Login Success!", 0DH, 0AH, "$"
-    m_fail    DB 0DH, 0AH, "Wrong Username or Password! Try again.", 0DH, 0AH, "$"
+    ; ===== Member 1: 面向客户的界面文本 =====
+    m_title   DB 0DH, 0AH, "========================================", 0DH, 0AH
+              DB "    PERSONAL BANKING INTEREST SYSTEM    ", 0DH, 0AH
+              DB "========================================", 0DH, 0AH, "$"
+    m_uPrompt DB 0DH, 0AH, "Enter Username (user): $"
+    m_pPrompt DB 0DH, 0AH, "Enter Password (1234): $"
+    m_ok      DB 0DH, 0AH, "Login Success! Welcome back.", 0DH, 0AH, "$"
+    m_fail    DB 0DH, 0AH, "Invalid Username or Password! Try again.", 0DH, 0AH, "$"
     
-    m_menu    DB 0DH, 0AH, 0DH, 0AH, "========== MAIN MENU ==========", 0DH, 0AH
+    m_menu    DB 0DH, 0AH, 0DH, 0AH, "========== USER SERVICES MENU ==========", 0DH, 0AH
               DB "1. Calculate Simple Interest", 0DH, 0AH
               DB "2. Calculate Total Maturity Amount", 0DH, 0AH
               DB "3. Calculate Net Interest (After Tax)", 0DH, 0AH
@@ -40,8 +42,8 @@
               DB "Select option (1-5) and press Enter: $"
               
     m_err     DB 0DH, 0AH, "Invalid choice! Enter 1-5 and press Enter.$"
-    m_exit    DB 0DH, 0AH, "Do you want to exit (y/n)? $"
-    m_bye     DB 0DH, 0AH, "Logged Out Successfully. Goodbye!$"
+    m_exit    DB 0DH, 0AH, "Do you want to logout and exit (y/n)? $"
+    m_bye     DB 0DH, 0AH, "Thank you for using our services. Goodbye!$"
 
     ; 临时占位文本
     m_stub    DB 0DH, 0AH, "[Member Module Function Executed]", 0DH, 0AH, "$"
@@ -57,7 +59,7 @@ MAIN PROC
     INT 21H
 
 ; ==============================================
-; Member 1: 登录模块 (Login Module)
+; Member 1: 登录模块 (User Login Module)
 ; ==============================================
 LOGIN_PAGE:
     ; --- 1. 输入 Username ---
@@ -110,7 +112,7 @@ COPY_P:
     MOV user_pass[SI], '$'
 
 CHECK_PASS:
-    ; --- 3. 校验 Username (admin) ---
+    ; --- 3. 校验 Username (user) ---
     MOV AL, user_id[0]
     CMP AL, sys_user[0]
     JNE LOGIN_FAIL
@@ -157,14 +159,14 @@ LOGIN_FAIL:
     JMP LOGIN_PAGE
 
 ; ==============================================
-; Member 1: 主菜单模块 (需按 Enter 确定跳转)
+; Member 1: 主菜单模块 (按 Enter 确定)
 ; ==============================================
 SHOW_MENU:
     LEA DX, m_menu
     MOV AH, 09H
     INT 21H
 
-    ; 读取输入 (输入后按 Enter)
+    ; 读取输入 (按 Enter 确认)
     LEA DX, input_buffer
     MOV AH, 0AH
     INT 21H
@@ -200,35 +202,35 @@ MENU_ERROR:
 ; Member 1: 预留给 Member 2 和 Member 3 的功能跳转入口
 ; ==============================================
 EXEC_FUNC1:
-    ; --- Member 2 贴代码位置: Calculate Simple Interest ---
+    ; --- Member 2 贴代码位置 ---
     LEA DX, m_stub
     MOV AH, 09H
     INT 21H
     JMP SHOW_MENU
 
 EXEC_FUNC2:
-    ; --- Member 2 贴代码位置: Calculate Total Maturity ---
+    ; --- Member 2 贴代码位置 ---
     LEA DX, m_stub
     MOV AH, 09H
     INT 21H
     JMP SHOW_MENU
 
 EXEC_FUNC3:
-    ; --- Member 3 贴代码位置: Calculate Net Interest ---
+    ; --- Member 3 贴代码位置 ---
     LEA DX, m_stub
     MOV AH, 09H
     INT 21H
     JMP SHOW_MENU
 
 EXEC_FUNC4:
-    ; --- Member 3 贴代码位置: Calculate Monthly Payout ---
+    ; --- Member 3 贴代码位置 ---
     LEA DX, m_stub
     MOV AH, 09H
     INT 21H
     JMP SHOW_MENU
 
 ; ==============================================
-; Member 1: 退出确认模块 (需按 Enter 确定)
+; Member 1: 退出确认模块 (按 Enter 确定)
 ; ==============================================
 ASK_EXIT:
     LEA DX, m_exit
