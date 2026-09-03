@@ -4,150 +4,186 @@
 .DATA
 
 ; =========================================================
-; ACCOUNT DATA
+; ACCOUNT STORAGE
+; Maximum 3 accounts
+; Each User ID  = 4 characters
+; Each Password = 4 characters
 ; =========================================================
 
-accountID1      DB "A001",'$'
-accountID2      DB "A002",'$'
-accountID3      DB "A003",'$'
+accountIDs       DB 12 DUP(?)
+accountPasswords DB 12 DUP(?)
 
-password1       DB "1234"
-password2       DB "5678"
-password3       DB "9999"
+accountCount     DB 0
+currentAccount   DB 0
 
-USERID          DB 4 DUP(?)
-PASSWORD        DB 4 DUP(?)
-
-accountCount    DB 3
-currentAccount  DB 0
+USERID           DB 4 DUP(?)
+PASSWORD         DB 4 DUP(?)
 
 ; =========================================================
-; VARIABLES
+; BANK VARIABLES
 ; =========================================================
 
-principal       DW 0
-rate            DW 5
-months          DW 0
+principal        DW 0
+rate             DW 5
+months           DW 0
 
-totalInterest   DW 0
-taxDeduction    DW 0
-netInterest     DW 0
-monthlyPayout   DW 0
+totalInterest    DW 0
+taxDeduction     DW 0
+netInterest      DW 0
+monthlyPayout    DW 0
 
-DIGITS          DB 6 DUP(?)
+DIGITS           DB 6 DUP(?)
 
-; =========================================================
-; LOGIN MESSAGES
-; =========================================================
 
-LOGINMSG        DB 13,10
-                DB "========================================",13,10
-                DB "          BANK ACCOUNT SYSTEM",13,10
-                DB "========================================",13,10
-                DB "Enter User ID: $"
 
-PASSWORDMSG     DB 13,10
-                DB "Enter Password: $"
 
-LOGINERROR      DB 13,10
-                DB "ERROR: Invalid User ID or Password!",13,10
-                DB "Please try again.",13,10,"$"
-
-LOGINSUCCESS    DB 13,10
-                DB "LOGIN SUCCESSFUL!",13,10
-                DB "Welcome to the Bank Account System.",13,10,"$"
+LOGINIDBUF       DB 4 DUP(?)
+LOGINPASSBUF     DB 4 DUP(?)
 
 ; =========================================================
-; MENU MESSAGES
+; CREATE ACCOUNT
 ; =========================================================
 
-MENUMSG         DB 13,10
-                DB 13,10
-                DB "========================================",13,10
-                DB "              MAIN MENU",13,10
-                DB "========================================",13,10
-                DB "1. Calculate Total Interest",13,10
-                DB "2. Calculate Net Interest",13,10
-                DB "3. Monthly Payout",13,10
-                DB "4. Bank Account Summary",13,10
-                DB "5. Exit",13,10
-                DB "========================================",13,10
-                DB "Enter your option: $"
+CREATE_TITLE     DB 13,10
+                 DB "========================================",13,10
+                 DB "          CREATE ACCOUNT",13,10
+                 DB "========================================",13,10,"$"
 
-INVALIDOPTION   DB 13,10
-                DB "ERROR: Invalid option!",13,10,"$"
+CREATE_ID        DB "Enter User ID (4 characters): $"
 
-; =========================================================
-; INPUT MESSAGES
-; =========================================================
+CREATE_PASS      DB 13,10
+                 DB "Enter Password (4 characters): $"
 
-INPUTPRINCIPAL  DB 13,10
-                DB "Enter Principal Amount (RM): $"
+ACCOUNT_SUCCESS  DB 13,10
+                 DB "ACCOUNT CREATED SUCCESSFULLY!",13,10,"$"
 
-INPUTMONTHS     DB 13,1
-                DB "Enter Number of Months: $"
-
-INVALIDINPUT    DB 13,10
-                DB "ERROR: Invalid input!",13,10
-                DB "Please enter numbers only and no negative value.",13,10,"$"
-
-ZEROMONTH       DB 13,10
-                DB "ERROR: Number of months cannot be 0!",13,10,"$"
+ACCOUNT_FULL     DB 13,10
+                 DB "ERROR: Maximum 3 accounts reached!",13,10,"$"
 
 ; =========================================================
-; RESULT MESSAGES
+; LOGIN
 ; =========================================================
 
-TOTALMSG        DB 13,10
-                DB "Total Interest : RM $"
+LOGIN_TITLE      DB 13,10
+                 DB "========================================",13,10
+                 DB "                 LOGIN",13,10
+                 DB "========================================",13,10
+                 DB "1. Login",13,10
+                 DB "2. End System",13,10
+                 DB "========================================",13,10
+                 DB "Enter your option: $"
 
-TAXMSG          DB 13,10
-                DB "Tax Deduction (10%) : RM $"
+LOGIN_ID         DB 13,10
+                 DB "Enter User ID: $"
 
-NETMSG          DB 13,10
-                DB "Net Interest : RM $"
+LOGIN_PASS       DB 13,10
+                 DB "Enter Password: $"
 
-MONTHLYMSG      DB 13,10
-                DB "Monthly Payout : RM $"
+LOGIN_ERROR      DB 13,10
+                 DB "ERROR: Invalid User ID or Password!",13,10
+                 DB "Please try again.",13,10,"$"
+
+LOGIN_SUCCESS    DB 13,10
+                 DB "LOGIN SUCCESSFUL!",13,10
+                 DB "Welcome to the Bank Account System.",13,10,"$"
+
+INVALIDLOGINOPTION DB 13,10
+                   DB "ERROR: Invalid option!",13,10,"$"
+
+; =========================================================
+; MAIN MENU
+; =========================================================
+
+MENUMSG          DB 13,10
+                 DB "========================================",13,10
+                 DB "              MAIN MENU",13,10
+                 DB "========================================",13,10
+                 DB "1. Calculate Total Interest",13,10
+                 DB "2. Calculate Net Interest",13,10
+                 DB "3. Monthly Payout",13,10
+                 DB "4. Bank Account Summary",13,10
+                 DB "5. Exit",13,10
+                 DB "========================================",13,10
+                 DB "Enter your option: $"
+
+INVALIDOPTION    DB 13,10
+                 DB "ERROR: Invalid option!",13,10,"$"
+
+; =========================================================
+; INPUT
+; =========================================================
+
+INPUTPRINCIPAL   DB 13,10
+                 DB "Enter Principal Amount (RM): $"
+
+INPUTMONTHS      DB 13,10
+                 DB "Enter Number of Months: $"
+
+INVALIDINPUT     DB 13,10
+                 DB "ERROR: Invalid input!",13,10
+                 DB "Please enter numbers only and no negative value.",13,10,"$"
+
+ZEROMONTH        DB 13,10
+                 DB "ERROR: Number of months cannot be 0!",13,10,"$"
+
+; =========================================================
+; RESULTS
+; =========================================================
+
+TOTALMSG         DB 13,10
+                 DB "Total Interest : RM $"
+
+TAXMSG           DB 13,10
+                 DB "Tax Deduction (10%) : RM $"
+
+NETMSG           DB 13,10
+                 DB "Net Interest : RM $"
+
+MONTHLYMSG       DB 13,10
+                 DB "Monthly Payout : RM $"
 
 ; =========================================================
 ; BANK ACCOUNT SUMMARY
 ; =========================================================
 
-TITLEBM         DB 13,10
-                DB "========================================",13,10
-                DB "       BANK ACCOUNT SUMMARY",13,10
-                DB "========================================$"
+TITLEBM          DB 13,10
+                 DB "========================================",13,10
+                 DB "       BANK ACCOUNT SUMMARY",13,10
+                 DB "========================================$"
 
-PRINCIPALM      DB 13,10
-                DB "Principal Amount : RM $"
+PRINCIPALM       DB 13,10
+                 DB "Principal Amount : RM $"
 
-SIMINTM         DB 13,10
-                DB "Total Interest   : RM $"
+SIMINTM          DB 13,10
+                 DB "Total Interest   : RM $"
 
-TAXM            DB 13,10
-                DB "Tax (10%)        : RM $"
+TAXM             DB 13,10
+                 DB "Tax (10%)        : RM $"
 
-NETM            DB 13,10
-                DB "Net Interest     : RM $"
+NETM             DB 13,10
+                 DB "Net Interest     : RM $"
 
-MONTHM          DB 13,10
-                DB "Monthly Payout   : RM $"
+MONTHM           DB 13,10
+                 DB "Monthly Payout   : RM $"
 
-NL              DB 13,10,"$"
+NL               DB 13,10,"$"
 
 
 .CODE
+
+; =========================================================
+; MAIN
+; =========================================================
 
 MAIN PROC
 
     MOV AX, @DATA
     MOV DS, AX
 
-    ; =====================================================
-    ; LOGIN
-    ; =====================================================
+    ; Create account only once
+    CALL CreateAccount
 
+    ; Go to Login Page
     CALL UserLogin
 
 
@@ -160,21 +196,20 @@ MainMenuLoop:
     CALL MainMenu
 
     CMP AL, 1
-    JE Option1
+    JE DoOption1
 
     CMP AL, 2
-    JE Option2
+    JE DoOption2
 
     CMP AL, 3
-    JE Option3
+    JE DoOption3
 
     CMP AL, 4
-    JE Option4
+    JE DoOption4
 
     CMP AL, 5
-    JE ExitProgram
+    JE DoReturnLogin
 
-    ; Invalid option
     MOV AH, 09H
     LEA DX, INVALIDOPTION
     INT 21H
@@ -184,10 +219,9 @@ MainMenuLoop:
 
 ; =========================================================
 ; OPTION 1
-; CALCULATE TOTAL INTEREST
 ; =========================================================
 
-Option1:
+DoOption1:
 
     CALL GetPrincipalAndMonths
     CALL CalculateInterest
@@ -204,11 +238,9 @@ Option1:
 
 ; =========================================================
 ; OPTION 2
-; CALCULATE NET INTEREST
-; SHOW TAX
 ; =========================================================
 
-Option2:
+DoOption2:
 
     CALL GetPrincipalAndMonths
     CALL CalculateInterest
@@ -232,10 +264,9 @@ Option2:
 
 ; =========================================================
 ; OPTION 3
-; MONTHLY PAYOUT
 ; =========================================================
 
-Option3:
+DoOption3:
 
     CALL GetPrincipalAndMonths
     CALL CalculateInterest
@@ -252,10 +283,9 @@ Option3:
 
 ; =========================================================
 ; OPTION 4
-; BANK ACCOUNT SUMMARY
 ; =========================================================
 
-Option4:
+DoOption4:
 
     CALL GetPrincipalAndMonths
     CALL CalculateInterest
@@ -266,172 +296,408 @@ Option4:
 
 ; =========================================================
 ; OPTION 5
-; EXIT
+; RETURN TO LOGIN
 ; =========================================================
 
-ExitProgram:
+DoReturnLogin:
 
-    MOV AH, 4CH
-    INT 21H
+    CALL UserLogin
+
+    JMP MainMenuLoop
 
 MAIN ENDP
 
 
 ; =========================================================
-; USER LOGIN
-; USER ID + PASSWORD
+; CREATE ACCOUNT
 ; =========================================================
 
-UserLogin PROC
+; =========================================================
+; CREATE ACCOUNT
+; =========================================================
+
+CreateAccount PROC
+
+    MOV AL, accountCount
+    CMP AL, 3
+    JB CreateAccountOK
+    JMP AccountFull
 
 
-LoginAgain:
-
-    ; -----------------------------------------------------
-    ; Display Login
-    ; -----------------------------------------------------
+CreateAccountOK:
 
     MOV AH, 09H
-    LEA DX, LOGINMSG
+    LEA DX, CREATE_TITLE
     INT 21H
 
 
-    ; -----------------------------------------------------
-    ; Read User ID
-    ; -----------------------------------------------------
+; =========================================================
+; ENTER USER ID
+; =========================================================
+
+    MOV AH, 09H
+    LEA DX, CREATE_ID
+    INT 21H
 
     MOV SI, 0
 
-ReadID:
+
+CreateIDLoop:
 
     MOV AH, 01H
     INT 21H
 
     CMP AL, 0DH
-    JE CheckID
+    JE CreateIDLoop
 
     MOV USERID[SI], AL
 
     INC SI
 
     CMP SI, 4
-    JL ReadID
+    JL CreateIDLoop
 
 
-WaitIDEnter:
+; =========================================================
+; WAIT FOR ENTER
+; =========================================================
+
+CreateIDWaitEnter:
 
     MOV AH, 01H
     INT 21H
 
     CMP AL, 0DH
-    JNE WaitIDEnter
+    JNE CreateIDWaitEnter
 
 
 ; =========================================================
-; CHECK USER ID
+; ENTER PASSWORD
 ; =========================================================
-
-CheckID:
-
-    ; Check A001
-    LEA SI, USERID
-    LEA DI, accountID1
-
-    CALL CompareID
-
-    CMP AL, 1
-    JE CheckPassword1
-
-
-    ; Check A002
-    LEA SI, USERID
-    LEA DI, accountID2
-
-    CALL CompareID
-
-    CMP AL, 1
-    JE CheckPassword2
-
-
-    ; Check A003
-    LEA SI, USERID
-    LEA DI, accountID3
-
-    CALL CompareID
-
-    CMP AL, 1
-    JE CheckPassword3
-
-
-    ; -----------------------------------------------------
-    ; Invalid User ID
-    ; -----------------------------------------------------
 
     MOV AH, 09H
-    LEA DX, LOGINERROR
-    INT 21H
-
-    JMP LoginAgain
-
-
-; =========================================================
-; PASSWORD FOR A001
-; =========================================================
-
-CheckPassword1:
-
-    MOV currentAccount, 1
-
-    LEA DI, password1
-
-    JMP ReadPassword
-
-
-; =========================================================
-; PASSWORD FOR A002
-; =========================================================
-
-CheckPassword2:
-
-    MOV currentAccount, 2
-
-    LEA DI, password2
-
-    JMP ReadPassword
-
-
-; =========================================================
-; PASSWORD FOR A003
-; =========================================================
-
-CheckPassword3:
-
-    MOV currentAccount, 3
-
-    LEA DI, password3
-
-
-; =========================================================
-; READ PASSWORD
-; =========================================================
-
-ReadPassword:
-
-    MOV AH, 09H
-    LEA DX, PASSWORDMSG
+    LEA DX, CREATE_PASS
     INT 21H
 
     MOV SI, 0
+
+
+CreatePasswordLoop:
+
+    MOV AH, 01H
+    INT 21H
+
+    CMP AL, 0DH
+    JE CreatePasswordLoop
+
+    MOV PASSWORD[SI], AL
+
+    INC SI
+
+    CMP SI, 4
+    JL CreatePasswordLoop
+
+
+; =========================================================
+; WAIT FOR ENTER
+; =========================================================
+
+CreatePasswordWaitEnter:
+
+    MOV AH, 01H
+    INT 21H
+
+    CMP AL, 0DH
+    JNE CreatePasswordWaitEnter
+
+
+; =========================================================
+; STORE USER ID
+; =========================================================
+
+    MOV AL, accountCount
+    XOR AH, AH
+
+    MOV BL, 4
+    MUL BL
+
+    MOV DI, AX
+
+    MOV SI, 0
+
+
+StoreIDLoop:
+
+    MOV AL, USERID[SI]
+    MOV accountIDs[DI], AL
+
+    INC SI
+    INC DI
+
+    CMP SI, 4
+    JL StoreIDLoop
+
+
+; =========================================================
+; STORE PASSWORD
+; =========================================================
+
+    MOV AL, accountCount
+    XOR AH, AH
+
+    MOV BL, 4
+    MUL BL
+
+    MOV DI, AX
+
+    MOV SI, 0
+
+
+StorePasswordLoop:
+
+    MOV AL, PASSWORD[SI]
+    MOV accountPasswords[DI], AL
+
+    INC SI
+    INC DI
+
+    CMP SI, 4
+    JL StorePasswordLoop
+
+
+; =========================================================
+; ACCOUNT CREATED
+; =========================================================
+
+    INC accountCount
+
+    MOV AH, 09H
+    LEA DX, ACCOUNT_SUCCESS
+    INT 21H
+
+    RET
+
+
+; =========================================================
+; ACCOUNT FULL
+; =========================================================
+
+AccountFull:
+
+    MOV AH, 09H
+    LEA DX, ACCOUNT_FULL
+    INT 21H
+
+    RET
+
+CreateAccount ENDP
+
+
+; =========================================================
+; USER LOGIN
+; =========================================================
+
+UserLogin PROC
+
+
+; =========================================================
+; LOGIN PAGE
+; =========================================================
+
+LoginPage:
+
+    MOV AH, 09H
+    LEA DX, LOGIN_TITLE
+    INT 21H
+
+
+; =========================================================
+; SELECT LOGIN / END SYSTEM
+; =========================================================
+
+   MOV AH, 01H
+   INT 21H
+
+   CMP AL, '1'
+   JE StartLogin
+
+   CMP AL, '2'
+   JE CheckEndSystem
+
+   MOV AH, 09H
+   LEA DX, INVALIDLOGINOPTION
+   INT 21H
+
+   JMP LoginPage
+
+
+CheckEndSystem:
+    JMP EndSystem
+
+
+; =========================================================
+; START LOGIN
+; =========================================================
+
+StartLogin:
+
+; Clear ENTER after option 1
+
+    MOV AH, 01H
+    INT 21H
+
+    CMP AL, 0DH
+    JE LoginIDStart
+
+    JMP StartLogin
+
+
+; =========================================================
+; USER ID
+; =========================================================
+
+LoginIDStart:
+
+    MOV AH, 09H
+    LEA DX, LOGIN_ID
+    INT 21H
+
+    MOV SI, 0
+
+
+ReadLoginID:
+
+    MOV AH, 01H
+    INT 21H
+
+    MOV LOGINIDBUF[SI], AL
+
+    INC SI
+
+    CMP SI, 4
+    JL ReadLoginID
+
+
+; =========================================================
+; ENTER AFTER USER ID
+; =========================================================
+
+LoginIDEnter:
+
+    MOV AH, 01H
+    INT 21H
+
+    CMP AL, 0DH
+    JNE LoginIDEnter
+
+
+; =========================================================
+; COPY LOGIN ID
+; =========================================================
+
+    MOV SI, 0
+
+
+CopyLoginID:
+
+    MOV AL, LOGINIDBUF[SI]
+    MOV USERID[SI], AL
+
+    INC SI
+
+    CMP SI, 4
+    JL CopyLoginID
+
+
+; =========================================================
+; SEARCH ACCOUNT
+; =========================================================
+
+    MOV BL, 0
+
+
+SearchAccount:
+
+    MOV AL, BL
+    CMP AL, accountCount
+
+    JB SearchAccountOK
+    JMP LoginError
+
+
+SearchAccountOK:
+
+    MOV AL, BL
+    XOR AH, AH
+
+    MOV DL, 4
+    MUL DL
+
+    MOV DI, AX
+    MOV SI, 0
+
+
+; =========================================================
+; COMPARE USER ID
+; =========================================================
+
+CompareLoginID:
+
+    MOV AL, USERID[SI]
+
+    CMP AL, accountIDs[DI]
+
+    JE LoginIDCharacterOK
+
+    JMP NextAccount
+
+
+LoginIDCharacterOK:
+
+    INC SI
+    INC DI
+
+    CMP SI, 4
+    JL CompareLoginID
+
+
+; User ID found
+
+    MOV currentAccount, BL
+
+    JMP ReadLoginPassword
+
+
+; =========================================================
+; NEXT ACCOUNT
+; =========================================================
+
+NextAccount:
+
+    INC BL
+
+    JMP SearchAccount
+
+
+; =========================================================
+; PASSWORD
+; =========================================================
+
+ReadLoginPassword:
+
+    MOV AH, 09H
+    LEA DX, LOGIN_PASS
+    INT 21H
+
+    MOV SI, 0
+
 
 ReadPasswordLoop:
 
     MOV AH, 01H
     INT 21H
 
-    CMP AL, 0DH
-    JE CheckPassword
-
-    MOV PASSWORD[SI], AL
+    MOV LOGINPASSBUF[SI], AL
 
     INC SI
 
@@ -439,102 +705,105 @@ ReadPasswordLoop:
     JL ReadPasswordLoop
 
 
-WaitPasswordEnter:
+; =========================================================
+; ENTER AFTER PASSWORD
+; =========================================================
+
+LoginPasswordEnter:
 
     MOV AH, 01H
     INT 21H
 
     CMP AL, 0DH
-    JNE WaitPasswordEnter
+    JNE LoginPasswordEnter
+
+
+; =========================================================
+; COPY PASSWORD
+; =========================================================
+
+    MOV SI, 0
+
+
+CopyLoginPassword:
+
+    MOV AL, LOGINPASSBUF[SI]
+    MOV PASSWORD[SI], AL
+
+    INC SI
+
+    CMP SI, 4
+    JL CopyLoginPassword
 
 
 ; =========================================================
 ; CHECK PASSWORD
 ; =========================================================
 
-CheckPassword:
+    MOV AL, currentAccount
+    XOR AH, AH
 
-    LEA SI, PASSWORD
+    MOV BL, 4
+    MUL BL
 
-    MOV CX, 4
+    MOV DI, AX
+    MOV SI, 0
 
-PasswordCompareLoop:
 
-    MOV AL, [SI]
+ComparePasswordLoop:
 
-    CMP AL, [DI]
+    MOV AL, PASSWORD[SI]
 
-    JNE PasswordWrong
+    CMP AL, accountPasswords[DI]
+
+    JE PasswordCharacterOK
+
+    JMP LoginError
+
+
+PasswordCharacterOK:
 
     INC SI
     INC DI
 
-    LOOP PasswordCompareLoop
+    CMP SI, 4
+    JL ComparePasswordLoop
 
 
 ; =========================================================
-; LOGIN SUCCESSFUL
+; LOGIN SUCCESS
 ; =========================================================
 
     MOV AH, 09H
-    LEA DX, LOGINSUCCESS
+    LEA DX, LOGIN_SUCCESS
     INT 21H
 
     RET
 
 
 ; =========================================================
-; PASSWORD WRONG
+; LOGIN ERROR
 ; =========================================================
 
-PasswordWrong:
+LoginError:
 
     MOV AH, 09H
-    LEA DX, LOGINERROR
+    LEA DX, LOGIN_ERROR
     INT 21H
 
-    JMP LoginAgain
+    JMP LoginPage
+
+
+; =========================================================
+; END SYSTEM
+; =========================================================
+
+EndSystem:
+
+    MOV AH, 4CH
+    INT 21H
 
 UserLogin ENDP
-
-
-; =========================================================
-; COMPARE USER ID
-; SI = USERID
-; DI = ACCOUNT ID
-; AL = 1 SAME
-; AL = 0 DIFFERENT
-; =========================================================
-
-CompareID PROC
-
-    MOV CX, 4
-
-CompareLoop:
-
-    MOV AL, [SI]
-
-    CMP AL, [DI]
-
-    JNE IDNotSame
-
-    INC SI
-    INC DI
-
-    LOOP CompareLoop
-
-    MOV AL, 1
-
-    RET
-
-
-IDNotSame:
-
-    MOV AL, 0
-
-    RET
-
-CompareID ENDP
 
 
 ; =========================================================
@@ -554,6 +823,10 @@ MainMenu PROC
 
     MOV BL, AL
 
+
+; =========================================================
+; CLEAR ENTER
+; =========================================================
 
 MenuEnter:
 
@@ -576,10 +849,6 @@ MainMenu ENDP
 
 GetPrincipalAndMonths PROC
 
-
-; =========================================================
-; PRINCIPAL
-; =========================================================
 
 GetPrincipalAgain:
 
@@ -650,10 +919,7 @@ GetPrincipalAndMonths ENDP
 
 
 ; =========================================================
-; READ NUMBER WITH VALIDATION
-;
-; CF = 0 -> VALID
-; CF = 1 -> INVALID
+; READ NUMBER
 ; =========================================================
 
 ReadNumber PROC
@@ -669,36 +935,50 @@ ReadNumberLoop:
 
 
     ; ENTER
+
     CMP AL, 0DH
     JE ReadNumberDone
 
 
     ; Negative sign
+
     CMP AL, '-'
-    JE ReadNumberInvalid
+
+    ; Local jump to invalid
+    JE NumberNegative
+
+    JMP CheckNumberDigit
 
 
-    ; Less than 0
+NumberNegative:
+
+    JMP ReadNumberInvalid
+
+
+; =========================================================
+; CHECK DIGIT
+; =========================================================
+
+CheckNumberDigit:
+
     CMP AL, '0'
     JB ReadNumberInvalid
 
-
-    ; Greater than 9
     CMP AL, '9'
     JA ReadNumberInvalid
 
 
-    ; ASCII -> Number
+    ; Convert ASCII to number
+
     SUB AL, '0'
 
     XOR AH, AH
 
-
-    ; Save digit
     MOV SI, AX
 
 
     ; BX * 10
+
     MOV AX, BX
 
     MOV DX, 10
@@ -707,6 +987,7 @@ ReadNumberLoop:
 
 
     ; Add digit
+
     ADD AX, SI
 
     JC ReadNumberInvalid
@@ -736,7 +1017,7 @@ ClearInvalidInput:
 
 
 ; =========================================================
-; VALID INPUT
+; NUMBER COMPLETE
 ; =========================================================
 
 ReadNumberDone:
@@ -757,8 +1038,9 @@ ReadNumber ENDP
 CalculateInterest PROC
 
     ; Total Interest
-    MOV AX, principal
+    ; principal * rate
 
+    MOV AX, principal
     MOV BX, rate
 
     MUL BX
@@ -767,8 +1049,8 @@ CalculateInterest PROC
 
 
     ; Tax = Total Interest / 10
-    MOV AX, totalInterest
 
+    MOV AX, totalInterest
     MOV BX, 10
 
     XOR DX, DX
@@ -779,6 +1061,8 @@ CalculateInterest PROC
 
 
     ; Net Interest
+    ; Total Interest - Tax
+
     MOV AX, totalInterest
 
     SUB AX, taxDeduction
@@ -787,6 +1071,8 @@ CalculateInterest PROC
 
 
     ; Monthly Payout
+    ; Net Interest / Months
+
     MOV AX, netInterest
 
     XOR DX, DX
@@ -813,16 +1099,17 @@ BankAccountSummary PROC
     INT 21H
 
 
-    ; =====================================================
-    ; Principal
-    ; Principal is stored directly as RM
-    ; =====================================================
+; =========================================================
+; PRINCIPAL
+; Principal is direct RM
+; =========================================================
 
     MOV AH, 09H
     LEA DX, PRINCIPALM
     INT 21H
 
     MOV AX, principal
+
     CALL PrintNumber
 
     MOV DL, '.'
@@ -838,51 +1125,55 @@ BankAccountSummary PROC
     INT 21H
 
 
-    ; =====================================================
-    ; Total Interest
-    ; =====================================================
+; =========================================================
+; TOTAL INTEREST
+; =========================================================
 
     MOV AH, 09H
     LEA DX, SIMINTM
     INT 21H
 
     MOV AX, totalInterest
+
     CALL PrintMoney
 
 
-    ; =====================================================
-    ; Tax
-    ; =====================================================
+; =========================================================
+; TAX
+; =========================================================
 
     MOV AH, 09H
     LEA DX, TAXM
     INT 21H
 
     MOV AX, taxDeduction
+
     CALL PrintMoney
 
 
-    ; =====================================================
-    ; Net Interest
-    ; =====================================================
+; =========================================================
+; NET INTEREST
+; =========================================================
 
     MOV AH, 09H
     LEA DX, NETM
     INT 21H
 
     MOV AX, netInterest
+
     CALL PrintMoney
 
 
-    ; =====================================================
-    ; Monthly Payout
-    ; =====================================================
+; =========================================================
+; MONTHLY PAYOUT
+; =========================================================
 
     MOV AH, 09H
     LEA DX, MONTHM
     INT 21H
 
     MOV AX, monthlyPayout
+
     CALL PrintMoney
 
 
@@ -913,9 +1204,7 @@ PrintMoney PROC
 
 
     MOV DL, '.'
-
     MOV AH, 02H
-
     INT 21H
 
 
@@ -935,14 +1224,10 @@ PrintMoney ENDP
 PrintNumber PROC
 
     CMP AX, 0
-
     JNE ConvertNumber
 
-
     MOV DL, '0'
-
     MOV AH, 02H
-
     INT 21H
 
     RET
@@ -966,7 +1251,6 @@ ConvertLoop:
     INC SI
 
     CMP AX, 0
-
     JNE ConvertLoop
 
 
@@ -979,11 +1263,9 @@ PrintLoop:
     ADD DL, '0'
 
     MOV AH, 02H
-
     INT 21H
 
     CMP SI, 0
-
     JNE PrintLoop
 
     RET
@@ -1011,7 +1293,6 @@ PrintTwoDigits PROC
     MOV DL, AL
 
     MOV AH, 02H
-
     INT 21H
 
 
@@ -1020,7 +1301,6 @@ PrintTwoDigits PROC
     ADD DL, '0'
 
     MOV AH, 02H
-
     INT 21H
 
     RET
