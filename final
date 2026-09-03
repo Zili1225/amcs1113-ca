@@ -1,18 +1,44 @@
 .MODEL SMALL
-.STACK 100H
+.STACK 100
 
 .DATA
 
 ; =========================================================
-; [MEMBER 1 WORK] - ACCOUNT DATA & SYSTEM MESSAGES
+; ACCOUNT DATA
 ; =========================================================
+
 accountID1      DB "A001",'$'
 accountID2      DB "A002",'$'
 accountID3      DB "A003",'$'
 
+password1       DB "1234"
+password2       DB "5678"
+password3       DB "9999"
+
 USERID          DB 4 DUP(?)
+PASSWORD        DB 4 DUP(?)
+
 accountCount    DB 3
 currentAccount  DB 0
+
+; =========================================================
+; VARIABLES
+; =========================================================
+
+principal       DW 0
+rate            DW 5
+months          DW 0
+
+totalInterest   DW 0
+taxDeduction    DW 0
+netInterest     DW 0
+monthlyPayout   DW 0
+
+DIGITS          DB 6 DUP(?)
+
+; =========================================================
+; LOGIN MESSAGES
+; =========================================================
 
 LOGINMSG        DB 13,10
                 DB "========================================",13,10
@@ -20,9 +46,20 @@ LOGINMSG        DB 13,10
                 DB "========================================",13,10
                 DB "Enter User ID: $"
 
-INVALIDID       DB 13,10
-                DB "ERROR: Invalid User ID!",13,10
-                DB "Please enter A001, A002 or A003.",13,10,"$"
+PASSWORDMSG     DB 13,10
+                DB "Enter Password: $"
+
+LOGINERROR      DB 13,10
+                DB "ERROR: Invalid User ID or Password!",13,10
+                DB "Please try again.",13,10,"$"
+
+LOGINSUCCESS    DB 13,10
+                DB "LOGIN SUCCESSFUL!",13,10
+                DB "Welcome to the Bank Account System.",13,10,"$"
+
+; =========================================================
+; MENU MESSAGES
+; =========================================================
 
 MENUMSG         DB 13,10
                 DB 13,10
@@ -40,19 +77,14 @@ MENUMSG         DB 13,10
 INVALIDOPTION   DB 13,10
                 DB "ERROR: Invalid option!",13,10,"$"
 
-
 ; =========================================================
-; [MEMBER 2 WORK] - DATA ENTRY & BASIC CALCULATION VARIABLES
+; INPUT MESSAGES
 ; =========================================================
-principal       DW 0              ; 本金 (RM)
-rate            DW 5              ; 固定年利率 5%
-months          DW 0              ; 存款期限 (月)
-totalInterest   DW 0              ; [功能1] 单利总利息
 
 INPUTPRINCIPAL  DB 13,10
                 DB "Enter Principal Amount (RM): $"
 
-INPUTMONTHS     DB 13,10
+INPUTMONTHS     DB 13,1
                 DB "Enter Number of Months: $"
 
 INVALIDINPUT    DB 13,10
@@ -62,16 +94,12 @@ INVALIDINPUT    DB 13,10
 ZEROMONTH       DB 13,10
                 DB "ERROR: Number of months cannot be 0!",13,10,"$"
 
+; =========================================================
+; RESULT MESSAGES
+; =========================================================
+
 TOTALMSG        DB 13,10
                 DB "Total Interest : RM $"
-
-
-; =========================================================
-; [MEMBER 3 WORK] - ADVANCED CALCULATION & SUMMARY MESSAGES
-; =========================================================
-taxDeduction    DW 0              ; [功能3] 扣税 10%
-netInterest     DW 0              ; 税后净利息
-monthlyPayout   DW 0              ; [功能4] 每月平均派息
 
 TAXMSG          DB 13,10
                 DB "Tax Deduction (10%) : RM $"
@@ -82,9 +110,13 @@ NETMSG          DB 13,10
 MONTHLYMSG      DB 13,10
                 DB "Monthly Payout : RM $"
 
+; =========================================================
+; BANK ACCOUNT SUMMARY
+; =========================================================
+
 TITLEBM         DB 13,10
                 DB "========================================",13,10
-                DB "        BANK ACCOUNT SUMMARY",13,10
+                DB "       BANK ACCOUNT SUMMARY",13,10
                 DB "========================================$"
 
 PRINCIPALM      DB 13,10
@@ -104,23 +136,27 @@ MONTHM          DB 13,10
 
 NL              DB 13,10,"$"
 
-DIGITS          DB 6 DUP(?)       ; 数字打印缓冲区
 
-
-; =========================================================
-; CODE SEGMENT
-; =========================================================
 .CODE
 
 MAIN PROC
+
     MOV AX, @DATA
     MOV DS, AX
 
-    ; 1. 调用 Member 1 登录
+    ; =====================================================
+    ; LOGIN
+    ; =====================================================
+
     CALL UserLogin
 
+
+; =========================================================
+; MAIN MENU LOOP
+; =========================================================
+
 MainMenuLoop:
-    ; 2. 调用 Member 1 菜单
+
     CALL MainMenu
 
     CMP AL, 1
@@ -138,6 +174,7 @@ MainMenuLoop:
     CMP AL, 5
     JE ExitProgram
 
+    ; Invalid option
     MOV AH, 09H
     LEA DX, INVALIDOPTION
     INT 21H
@@ -146,76 +183,127 @@ MainMenuLoop:
 
 
 ; =========================================================
-; [MEMBER 1 WORK] - OPTION HANDLERS
+; OPTION 1
+; CALCULATE TOTAL INTEREST
 ; =========================================================
 
 Option1:
-    CALL GetPrincipalAndMonths    ; 调用 Member 2 输入
-    CALL CalculateInterest        ; 调用计算
-    
+
+    CALL GetPrincipalAndMonths
+    CALL CalculateInterest
+
     MOV AH, 09H
     LEA DX, TOTALMSG
     INT 21H
 
     MOV AX, totalInterest
-    CALL PrintCurrencyRM          ; 输出标准格式金额
+    CALL PrintMoney
+
     JMP MainMenuLoop
 
+
+; =========================================================
+; OPTION 2
+; CALCULATE NET INTEREST
+; SHOW TAX
+; =========================================================
+
 Option2:
-    CALL GetPrincipalAndMonths    ; 调用 Member 2 输入
-    CALL CalculateInterest        ; 调用计算
+
+    CALL GetPrincipalAndMonths
+    CALL CalculateInterest
 
     MOV AH, 09H
     LEA DX, TAXMSG
     INT 21H
 
     MOV AX, taxDeduction
-    CALL PrintCurrencyRM
+    CALL PrintMoney
 
     MOV AH, 09H
     LEA DX, NETMSG
     INT 21H
 
     MOV AX, netInterest
-    CALL PrintCurrencyRM
+    CALL PrintMoney
+
     JMP MainMenuLoop
 
+
+; =========================================================
+; OPTION 3
+; MONTHLY PAYOUT
+; =========================================================
+
 Option3:
-    CALL GetPrincipalAndMonths    ; 调用 Member 2 输入
-    CALL CalculateInterest        ; 调用计算
+
+    CALL GetPrincipalAndMonths
+    CALL CalculateInterest
 
     MOV AH, 09H
     LEA DX, MONTHLYMSG
     INT 21H
 
     MOV AX, monthlyPayout
-    CALL PrintCurrencyRM
+    CALL PrintMoney
+
     JMP MainMenuLoop
+
+
+; =========================================================
+; OPTION 4
+; BANK ACCOUNT SUMMARY
+; =========================================================
 
 Option4:
-    CALL GetPrincipalAndMonths    ; 调用 Member 2 输入
-    CALL CalculateInterest        ; 调用计算
-    CALL BankAccountSummary       ; 调用 Member 3 Summary 显示
+
+    CALL GetPrincipalAndMonths
+    CALL CalculateInterest
+    CALL BankAccountSummary
+
     JMP MainMenuLoop
 
+
+; =========================================================
+; OPTION 5
+; EXIT
+; =========================================================
+
 ExitProgram:
+
     MOV AH, 4CH
     INT 21H
+
 MAIN ENDP
 
 
 ; =========================================================
-; [MEMBER 1 WORK] - USER LOGIN & CHECK MODULE
+; USER LOGIN
+; USER ID + PASSWORD
 ; =========================================================
+
 UserLogin PROC
+
+
 LoginAgain:
+
+    ; -----------------------------------------------------
+    ; Display Login
+    ; -----------------------------------------------------
+
     MOV AH, 09H
     LEA DX, LOGINMSG
     INT 21H
 
+
+    ; -----------------------------------------------------
+    ; Read User ID
+    ; -----------------------------------------------------
+
     MOV SI, 0
 
 ReadID:
+
     MOV AH, 01H
     INT 21H
 
@@ -223,72 +311,238 @@ ReadID:
     JE CheckID
 
     MOV USERID[SI], AL
+
     INC SI
 
     CMP SI, 4
     JL ReadID
 
-WaitEnter:
+
+WaitIDEnter:
+
     MOV AH, 01H
     INT 21H
 
     CMP AL, 0DH
-    JNE WaitEnter
+    JNE WaitIDEnter
+
+
+; =========================================================
+; CHECK USER ID
+; =========================================================
 
 CheckID:
+
+    ; Check A001
     LEA SI, USERID
     LEA DI, accountID1
-    CALL CompareID
-    CMP AL, 1
-    JE LoginSuccess1
 
+    CALL CompareID
+
+    CMP AL, 1
+    JE CheckPassword1
+
+
+    ; Check A002
     LEA SI, USERID
     LEA DI, accountID2
-    CALL CompareID
-    CMP AL, 1
-    JE LoginSuccess2
 
+    CALL CompareID
+
+    CMP AL, 1
+    JE CheckPassword2
+
+
+    ; Check A003
     LEA SI, USERID
     LEA DI, accountID3
+
     CALL CompareID
+
     CMP AL, 1
-    JE LoginSuccess3
+    JE CheckPassword3
+
+
+    ; -----------------------------------------------------
+    ; Invalid User ID
+    ; -----------------------------------------------------
 
     MOV AH, 09H
-    LEA DX, INVALIDID
+    LEA DX, LOGINERROR
     INT 21H
+
     JMP LoginAgain
 
-LoginSuccess1:
+
+; =========================================================
+; PASSWORD FOR A001
+; =========================================================
+
+CheckPassword1:
+
     MOV currentAccount, 1
-    RET
-LoginSuccess2:
+
+    LEA DI, password1
+
+    JMP ReadPassword
+
+
+; =========================================================
+; PASSWORD FOR A002
+; =========================================================
+
+CheckPassword2:
+
     MOV currentAccount, 2
-    RET
-LoginSuccess3:
+
+    LEA DI, password2
+
+    JMP ReadPassword
+
+
+; =========================================================
+; PASSWORD FOR A003
+; =========================================================
+
+CheckPassword3:
+
     MOV currentAccount, 3
+
+    LEA DI, password3
+
+
+; =========================================================
+; READ PASSWORD
+; =========================================================
+
+ReadPassword:
+
+    MOV AH, 09H
+    LEA DX, PASSWORDMSG
+    INT 21H
+
+    MOV SI, 0
+
+ReadPasswordLoop:
+
+    MOV AH, 01H
+    INT 21H
+
+    CMP AL, 0DH
+    JE CheckPassword
+
+    MOV PASSWORD[SI], AL
+
+    INC SI
+
+    CMP SI, 4
+    JL ReadPasswordLoop
+
+
+WaitPasswordEnter:
+
+    MOV AH, 01H
+    INT 21H
+
+    CMP AL, 0DH
+    JNE WaitPasswordEnter
+
+
+; =========================================================
+; CHECK PASSWORD
+; =========================================================
+
+CheckPassword:
+
+    LEA SI, PASSWORD
+
+    MOV CX, 4
+
+PasswordCompareLoop:
+
+    MOV AL, [SI]
+
+    CMP AL, [DI]
+
+    JNE PasswordWrong
+
+    INC SI
+    INC DI
+
+    LOOP PasswordCompareLoop
+
+
+; =========================================================
+; LOGIN SUCCESSFUL
+; =========================================================
+
+    MOV AH, 09H
+    LEA DX, LOGINSUCCESS
+    INT 21H
+
     RET
+
+
+; =========================================================
+; PASSWORD WRONG
+; =========================================================
+
+PasswordWrong:
+
+    MOV AH, 09H
+    LEA DX, LOGINERROR
+    INT 21H
+
+    JMP LoginAgain
+
 UserLogin ENDP
 
 
+; =========================================================
+; COMPARE USER ID
+; SI = USERID
+; DI = ACCOUNT ID
+; AL = 1 SAME
+; AL = 0 DIFFERENT
+; =========================================================
+
 CompareID PROC
+
     MOV CX, 4
+
 CompareLoop:
+
     MOV AL, [SI]
+
     CMP AL, [DI]
+
     JNE IDNotSame
+
     INC SI
     INC DI
+
     LOOP CompareLoop
+
     MOV AL, 1
+
     RET
+
+
 IDNotSame:
+
     MOV AL, 0
+
     RET
+
 CompareID ENDP
 
 
+; =========================================================
+; MAIN MENU
+; =========================================================
+
 MainMenu PROC
+
     MOV AH, 09H
     LEA DX, MENUMSG
     INT 21H
@@ -297,9 +551,12 @@ MainMenu PROC
     INT 21H
 
     SUB AL, '0'
+
     MOV BL, AL
 
+
 MenuEnter:
+
     MOV AH, 01H
     INT 21H
 
@@ -307,291 +564,468 @@ MenuEnter:
     JNE MenuEnter
 
     MOV AL, BL
+
     RET
+
 MainMenu ENDP
 
 
 ; =========================================================
-; =========================================================
-; [MEMBER 2 WORK] - DATA ENTRY & INPUT VALIDATION MODULE
-; =========================================================
+; GET PRINCIPAL AND MONTHS
 ; =========================================================
 
 GetPrincipalAndMonths PROC
 
+
+; =========================================================
+; PRINCIPAL
+; =========================================================
+
 GetPrincipalAgain:
+
     MOV AH, 09H
     LEA DX, INPUTPRINCIPAL
     INT 21H
 
     CALL ReadNumber
 
-    JC PrincipalError             ; CF = 1 表示非法输入，弹错重试
+    JC PrincipalError
 
     MOV principal, AX
+
     JMP GetMonths
 
+
 PrincipalError:
+
     MOV AH, 09H
     LEA DX, INVALIDINPUT
     INT 21H
+
     JMP GetPrincipalAgain
 
+
+; =========================================================
+; MONTHS
+; =========================================================
+
 GetMonths:
+
 GetMonthsAgain:
+
     MOV AH, 09H
     LEA DX, INPUTMONTHS
     INT 21H
 
     CALL ReadNumber
 
-    JC MonthsError                ; CF = 1 表示非法输入
+    JC MonthsError
 
     CMP AX, 0
     JE MonthsZero
 
     MOV months, AX
+
     RET
 
+
 MonthsError:
+
     MOV AH, 09H
     LEA DX, INVALIDINPUT
     INT 21H
+
     JMP GetMonthsAgain
 
+
 MonthsZero:
+
     MOV AH, 09H
     LEA DX, ZEROMONTH
     INT 21H
+
     JMP GetMonthsAgain
 
 GetPrincipalAndMonths ENDP
 
 
-; ---------------------------------------------------------
-; [MEMBER 2 WORK] - READ NUMBER WITH VALIDATION
-; ---------------------------------------------------------
+; =========================================================
+; READ NUMBER WITH VALIDATION
+;
+; CF = 0 -> VALID
+; CF = 1 -> INVALID
+; =========================================================
+
 ReadNumber PROC
+
     XOR BX, BX
     MOV SI, 0
 
+
 ReadNumberLoop:
-    MOV AH, 01H           ; 单字符带回显 (Chapter 4)
-    INT 21H
 
-    CMP AL, 0DH           ; Enter 键
-    JE ReadNumberDone
-
-    CMP AL, '-'           ; 拦截负号 '-'
-    JE ReadNumberInvalid
-
-    CMP AL, '0'           ; 拦截小于 '0' 字符
-    JB ReadNumberInvalid
-
-    CMP AL, '9'           ; 拦截大于 '9' 字符
-    JA ReadNumberInvalid
-
-    SUB AL, '0'           ; ASCII 转数值
-    XOR AH, AH
-    MOV SI, AX
-
-    ; BX = BX * 10
-    MOV AX, BX
-    MOV DX, 10
-    MUL DX
-
-    ADD AX, SI
-    JC ReadNumberInvalid  ; 防 16 位整数溢出
-
-    MOV BX, AX
-    JMP ReadNumberLoop
-
-ReadNumberInvalid:
-ClearInvalidInput:
     MOV AH, 01H
     INT 21H
+
+
+    ; ENTER
+    CMP AL, 0DH
+    JE ReadNumberDone
+
+
+    ; Negative sign
+    CMP AL, '-'
+    JE ReadNumberInvalid
+
+
+    ; Less than 0
+    CMP AL, '0'
+    JB ReadNumberInvalid
+
+
+    ; Greater than 9
+    CMP AL, '9'
+    JA ReadNumberInvalid
+
+
+    ; ASCII -> Number
+    SUB AL, '0'
+
+    XOR AH, AH
+
+
+    ; Save digit
+    MOV SI, AX
+
+
+    ; BX * 10
+    MOV AX, BX
+
+    MOV DX, 10
+
+    MUL DX
+
+
+    ; Add digit
+    ADD AX, SI
+
+    JC ReadNumberInvalid
+
+    MOV BX, AX
+
+    JMP ReadNumberLoop
+
+
+; =========================================================
+; INVALID INPUT
+; =========================================================
+
+ReadNumberInvalid:
+
+ClearInvalidInput:
+
+    MOV AH, 01H
+    INT 21H
+
     CMP AL, 0DH
     JNE ClearInvalidInput
 
-    STC                   ; 设置 CF = 1
+    STC
+
     RET
 
+
+; =========================================================
+; VALID INPUT
+; =========================================================
+
 ReadNumberDone:
+
     MOV AX, BX
-    CLC                   ; 清除 CF = 0
+
+    CLC
+
     RET
+
 ReadNumber ENDP
 
 
 ; =========================================================
-; =========================================================
-; CALCULATE INTEREST (修正公式: P * Rate * Months / 1200)
-; =========================================================
+; CALCULATE INTEREST
 ; =========================================================
 
 CalculateInterest PROC
 
-    ; -----------------------------------------------------
-    ; [MEMBER 2 WORK] - 功能 1: 单利计算 (已彻底修正为精确公式)
-    ; 公式: Total Interest = Principal * Rate * Months / 1200
-    ; (或者 Principal * Rate * Months / 100 / 12)
-    ; -----------------------------------------------------
+    ; Total Interest
     MOV AX, principal
-    MOV BX, rate          ; Rate = 5%
-    MUL BX                ; DX:AX = Principal * 5
 
-    MOV BX, months
-    MUL BX                ; DX:AX = (Principal * 5) * Months
+    MOV BX, rate
 
-    ; 先除以 100 (算百分比)
-    MOV BX, 100D
-    DIV BX
-
-    ; 再除以 12 (算月份折算)
-    MOV DX, 0
-    MOV BX, 12D
-    DIV BX                ; AX 即为最终的正确利息整数 (RM)
+    MUL BX
 
     MOV totalInterest, AX
 
-    ; -----------------------------------------------------
-    ; [MEMBER 3 WORK] - 高级计算 (扣税 10% 与月收益)
-    ; -----------------------------------------------------
+
     ; Tax = Total Interest / 10
     MOV AX, totalInterest
-    MOV BX, 10D
+
+    MOV BX, 10
+
     XOR DX, DX
+
     DIV BX
+
     MOV taxDeduction, AX
 
-    ; Net Interest = Total Interest - Tax
+
+    ; Net Interest
     MOV AX, totalInterest
+
     SUB AX, taxDeduction
+
     MOV netInterest, AX
 
-    ; Monthly Payout = Net Interest / Months
+
+    ; Monthly Payout
     MOV AX, netInterest
+
     XOR DX, DX
+
     MOV BX, months
-    CMP BX, 0
-    JE SkipDivZero
+
     DIV BX
+
     MOV monthlyPayout, AX
-    JMP CalcDone
 
-SkipDivZero:
-    MOV monthlyPayout, 0
-
-CalcDone:
     RET
+
 CalculateInterest ENDP
 
 
 ; =========================================================
-; [MEMBER 3 WORK] - REPORT DISPLAY & FORMATTED MONEY PRINTING
+; BANK ACCOUNT SUMMARY
 ; =========================================================
 
 BankAccountSummary PROC
+
     MOV AH, 09H
     LEA DX, TITLEBM
     INT 21H
 
-    ; 1. 本金显示
+
+    ; =====================================================
+    ; Principal
+    ; Principal is stored directly as RM
+    ; =====================================================
+
     MOV AH, 09H
     LEA DX, PRINCIPALM
     INT 21H
-    MOV AX, principal
-    CALL PrintCurrencyRM
 
-    ; 2. 总利息
+    MOV AX, principal
+    CALL PrintNumber
+
+    MOV DL, '.'
+    MOV AH, 02H
+    INT 21H
+
+    MOV DL, '0'
+    MOV AH, 02H
+    INT 21H
+
+    MOV DL, '0'
+    MOV AH, 02H
+    INT 21H
+
+
+    ; =====================================================
+    ; Total Interest
+    ; =====================================================
+
     MOV AH, 09H
     LEA DX, SIMINTM
     INT 21H
-    MOV AX, totalInterest
-    CALL PrintCurrencyRM
 
-    ; 3. 扣税
+    MOV AX, totalInterest
+    CALL PrintMoney
+
+
+    ; =====================================================
+    ; Tax
+    ; =====================================================
+
     MOV AH, 09H
     LEA DX, TAXM
     INT 21H
-    MOV AX, taxDeduction
-    CALL PrintCurrencyRM
 
-    ; 4. 税后净利息
+    MOV AX, taxDeduction
+    CALL PrintMoney
+
+
+    ; =====================================================
+    ; Net Interest
+    ; =====================================================
+
     MOV AH, 09H
     LEA DX, NETM
     INT 21H
-    MOV AX, netInterest
-    CALL PrintCurrencyRM
 
-    ; 5. 每月收益
+    MOV AX, netInterest
+    CALL PrintMoney
+
+
+    ; =====================================================
+    ; Monthly Payout
+    ; =====================================================
+
     MOV AH, 09H
     LEA DX, MONTHM
     INT 21H
+
     MOV AX, monthlyPayout
-    CALL PrintCurrencyRM
+    CALL PrintMoney
+
 
     MOV AH, 09H
     LEA DX, NL
     INT 21H
+
     RET
+
 BankAccountSummary ENDP
 
 
-; ---------------------------------------------------------
-; 格式化打印整数金额并在末尾自动补齐 ".00"
-; ---------------------------------------------------------
-PrintCurrencyRM PROC
-    PUSH AX
-    PUSH DX
+; =========================================================
+; PRINT MONEY
+; =========================================================
 
-    CALL PrintNumber      ; 打印整数部分
+PrintMoney PROC
 
-    ; 打印 ".00"
+    XOR DX, DX
+
+    MOV BX, 100
+
+    DIV BX
+
+    MOV DI, DX
+
+    CALL PrintNumber
+
+
     MOV DL, '.'
+
     MOV AH, 02H
-    INT 21H
-    MOV DL, '0'
-    INT 21H
-    MOV DL, '0'
+
     INT 21H
 
-    POP DX
-    POP AX
+
+    MOV AX, DI
+
+    CALL PrintTwoDigits
+
     RET
-PrintCurrencyRM ENDP
 
+PrintMoney ENDP
+
+
+; =========================================================
+; PRINT NUMBER
+; =========================================================
 
 PrintNumber PROC
+
     CMP AX, 0
+
     JNE ConvertNumber
 
+
     MOV DL, '0'
+
     MOV AH, 02H
+
     INT 21H
+
     RET
+
 
 ConvertNumber:
+
     MOV BX, 10
+
     MOV SI, 0
 
+
 ConvertLoop:
+
     XOR DX, DX
+
     DIV BX
+
     MOV DIGITS[SI], DL
+
     INC SI
+
     CMP AX, 0
+
     JNE ConvertLoop
 
+
 PrintLoop:
+
     DEC SI
+
     MOV DL, DIGITS[SI]
+
     ADD DL, '0'
+
     MOV AH, 02H
+
     INT 21H
+
     CMP SI, 0
+
     JNE PrintLoop
+
     RET
+
 PrintNumber ENDP
+
+
+; =========================================================
+; PRINT TWO DIGITS
+; =========================================================
+
+PrintTwoDigits PROC
+
+    XOR DX, DX
+
+    MOV BX, 10
+
+    DIV BX
+
+    MOV SI, DX
+
+
+    ADD AL, '0'
+
+    MOV DL, AL
+
+    MOV AH, 02H
+
+    INT 21H
+
+
+    MOV DX, SI
+
+    ADD DL, '0'
+
+    MOV AH, 02H
+
+    INT 21H
+
+    RET
+
+PrintTwoDigits ENDP
+
 
 END MAIN
