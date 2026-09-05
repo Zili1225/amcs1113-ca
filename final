@@ -8,12 +8,13 @@
 ; Maximum 3 accounts
 ; Each User ID  = 4 characters
 ; Each Password = 4 characters
+; Pre-seeded with 1 default account: A001 / 1234
 ; =========================================================
 
-accountIDs       DB 12 DUP(?)
-accountPasswords DB 12 DUP(?)
+accountIDs       DB 'A','0','0','1', 8 DUP(?)
+accountPasswords DB '1','2','3','4', 8 DUP(?)
 
-accountCount     DB 0
+accountCount     DB 1
 currentAccount   DB 0
 
 USERID           DB 4 DUP(?)
@@ -33,9 +34,6 @@ netInterest      DW 0
 monthlyPayout    DW 0
 
 DIGITS           DB 6 DUP(?)
-
-
-
 
 LOGINIDBUF       DB 4 DUP(?)
 LOGINPASSBUF     DB 4 DUP(?)
@@ -69,7 +67,8 @@ LOGIN_TITLE      DB 13,10
                  DB "                 LOGIN",13,10
                  DB "========================================",13,10
                  DB "1. Login",13,10
-                 DB "2. End System",13,10
+                 DB "2. Register Account",13,10
+                 DB "3. End System",13,10
                  DB "========================================",13,10
                  DB "Enter your option: $"
 
@@ -180,10 +179,7 @@ MAIN PROC
     MOV AX, @DATA
     MOV DS, AX
 
-    ; Create account only once
-    CALL CreateAccount
-
-    ; Go to Login Page
+    ; Direct to Login Page (Default account A001 / 1234 is ready)
     CALL UserLogin
 
 
@@ -307,10 +303,6 @@ DoReturnLogin:
 
 MAIN ENDP
 
-
-; =========================================================
-; CREATE ACCOUNT
-; =========================================================
 
 ; =========================================================
 ; CREATE ACCOUNT
@@ -512,7 +504,7 @@ LoginPage:
 
 
 ; =========================================================
-; SELECT LOGIN / END SYSTEM
+; SELECT LOGIN / REGISTER / END SYSTEM
 ; =========================================================
 
    MOV AH, 01H
@@ -522,12 +514,24 @@ LoginPage:
    JE StartLogin
 
    CMP AL, '2'
+   JE CallRegister
+
+   CMP AL, '3'
    JE CheckEndSystem
 
    MOV AH, 09H
    LEA DX, INVALIDLOGINOPTION
    INT 21H
 
+   JMP LoginPage
+
+
+CallRegister:
+   ; Clear ENTER after option 2
+   MOV AH, 01H
+   INT 21H
+   
+   CALL CreateAccount
    JMP LoginPage
 
 
