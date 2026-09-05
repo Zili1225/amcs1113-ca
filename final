@@ -4,11 +4,7 @@
 .DATA
 
 ; =========================================================
-; ACCOUNT STORAGE
-; Maximum 3 accounts
-; Each User ID  = 4 characters
-; Each Password = 4 characters
-; Pre-seeded with 1 default account: A001 / 1234
+; ACCOUNT DATA
 ; =========================================================
 
 accountIDs       DB 'A','0','0','1', 8 DUP(?)
@@ -20,43 +16,70 @@ currentAccount   DB 0
 USERID           DB 4 DUP(?)
 PASSWORD         DB 4 DUP(?)
 
+LOGINIDBUF       DB 4 DUP(?)
+LOGINPASSBUF     DB 4 DUP(?)
+
+
 ; =========================================================
-; BANK VARIABLES
+; BANK DATA
 ; =========================================================
 
 principal        DW 0
 rate             DW 5
 months           DW 0
 
-totalInterest    DW 0
-taxDeduction     DW 0
-netInterest      DW 0
-monthlyPayout    DW 0
-
-DIGITS           DB 6 DUP(?)
-
-LOGINIDBUF       DB 4 DUP(?)
-LOGINPASSBUF     DB 4 DUP(?)
 
 ; =========================================================
-; CREATE ACCOUNT
+; MONEY DATA
+;
+; Example:
+;
+; RM1000.00
+;
+; totalInterestRM  = 1000
+; totalInterestDec = 0
+;
 ; =========================================================
 
-CREATE_TITLE     DB 13,10
-                 DB "========================================",13,10
-                 DB "          CREATE ACCOUNT",13,10
-                 DB "========================================",13,10,"$"
+totalInterestRM       DW 0
+totalInterestDec      DW 0
 
-CREATE_ID        DB "Enter User ID (4 characters): $"
+taxRM                 DW 0
+taxDec                DW 0
 
-CREATE_PASS      DB 13,10
-                 DB "Enter Password (4 characters): $"
+netInterestRM         DW 0
+netInterestDec        DW 0
 
-ACCOUNT_SUCCESS  DB 13,10
-                 DB "ACCOUNT CREATED SUCCESSFULLY!",13,10,"$"
+monthlyPayoutRM       DW 0
+monthlyPayoutDec      DW 0
 
-ACCOUNT_FULL     DB 13,10
-                 DB "ERROR: Maximum 3 accounts reached!",13,10,"$"
+
+; =========================================================
+; 32-BIT TEMPORARY VALUE
+;
+; Using two DW instead of DD
+;
+; HIGH : LOW
+; =========================================================
+
+workLow              DW 0
+workHigh             DW 0
+
+quotientLow          DW 0
+quotientHigh         DW 0
+
+remainderValue       DW 0
+
+tempLow              DW 0
+tempHigh             DW 0
+
+
+; =========================================================
+; NUMBER BUFFER
+; =========================================================
+
+DIGITS               DB 6 DUP(?)
+
 
 ; =========================================================
 ; LOGIN
@@ -89,6 +112,28 @@ LOGIN_SUCCESS    DB 13,10
 INVALIDLOGINOPTION DB 13,10
                    DB "ERROR: Invalid option!",13,10,"$"
 
+
+; =========================================================
+; REGISTER
+; =========================================================
+
+CREATE_TITLE     DB 13,10
+                 DB "========================================",13,10
+                 DB "          CREATE ACCOUNT",13,10
+                 DB "========================================",13,10,"$"
+
+CREATE_ID        DB "Enter User ID (4 characters): $"
+
+CREATE_PASS      DB 13,10
+                 DB "Enter Password (4 characters): $"
+
+ACCOUNT_SUCCESS  DB 13,10
+                 DB "ACCOUNT CREATED SUCCESSFULLY!",13,10,"$"
+
+ACCOUNT_FULL     DB 13,10
+                 DB "ERROR: Maximum 3 accounts reached!",13,10,"$"
+
+
 ; =========================================================
 ; MAIN MENU
 ; =========================================================
@@ -108,6 +153,7 @@ MENUMSG          DB 13,10
 INVALIDOPTION    DB 13,10
                  DB "ERROR: Invalid option!",13,10,"$"
 
+
 ; =========================================================
 ; INPUT
 ; =========================================================
@@ -125,12 +171,17 @@ INVALIDINPUT     DB 13,10
 ZEROMONTH        DB 13,10
                  DB "ERROR: Number of months cannot be 0!",13,10,"$"
 
+
 ; =========================================================
-; RESULTS
+; RESULT
 ; =========================================================
 
-TOTALMSG         DB 13,10
-                 DB "Total Interest : RM $"
+RESULTTITLE      DB 13,10
+                 DB "============================",13,10
+                 DB "           RESULT",13,10
+                 DB "============================",13,10,"$"
+
+TOTALMSG         DB "Total Interest : RM $"
 
 TAXMSG           DB 13,10
                  DB "Tax Deduction (10%) : RM $"
@@ -140,6 +191,7 @@ NETMSG           DB 13,10
 
 MONTHLYMSG       DB 13,10
                  DB "Monthly Payout : RM $"
+
 
 ; =========================================================
 ; BANK ACCOUNT SUMMARY
@@ -170,6 +222,7 @@ NL               DB 13,10,"$"
 
 .CODE
 
+
 ; =========================================================
 ; MAIN
 ; =========================================================
@@ -179,32 +232,47 @@ MAIN PROC
     MOV AX, @DATA
     MOV DS, AX
 
-    ; Direct to Login Page (Default account A001 / 1234 is ready)
     CALL UserLogin
 
-
-; =========================================================
-; MAIN MENU LOOP
-; =========================================================
 
 MainMenuLoop:
 
     CALL MainMenu
 
     CMP AL, 1
-    JE DoOption1
+    JNE CheckOption2
+    JMP DoOption1
+
+
+CheckOption2:
 
     CMP AL, 2
-    JE DoOption2
+    JNE CheckOption3
+    JMP DoOption2
+
+
+CheckOption3:
 
     CMP AL, 3
-    JE DoOption3
+    JNE CheckOption4
+    JMP DoOption3
+
+
+CheckOption4:
 
     CMP AL, 4
-    JE DoOption4
+    JNE CheckOption5
+    JMP DoOption4
+
+
+CheckOption5:
 
     CMP AL, 5
-    JE DoReturnLogin
+    JNE InvalidMainOption
+    JMP ReturnToLogin
+
+
+InvalidMainOption:
 
     MOV AH, 09H
     LEA DX, INVALIDOPTION
@@ -215,6 +283,7 @@ MainMenuLoop:
 
 ; =========================================================
 ; OPTION 1
+; TOTAL INTEREST
 ; =========================================================
 
 DoOption1:
@@ -222,11 +291,15 @@ DoOption1:
     CALL GetPrincipalAndMonths
     CALL CalculateInterest
 
+    CALL DisplayResultTitle
+
     MOV AH, 09H
     LEA DX, TOTALMSG
     INT 21H
 
-    MOV AX, totalInterest
+    MOV AX, totalInterestRM
+    MOV DX, totalInterestDec
+
     CALL PrintMoney
 
     JMP MainMenuLoop
@@ -234,6 +307,7 @@ DoOption1:
 
 ; =========================================================
 ; OPTION 2
+; NET INTEREST
 ; =========================================================
 
 DoOption2:
@@ -241,18 +315,25 @@ DoOption2:
     CALL GetPrincipalAndMonths
     CALL CalculateInterest
 
+    CALL DisplayResultTitle
+
     MOV AH, 09H
     LEA DX, TAXMSG
     INT 21H
 
-    MOV AX, taxDeduction
+    MOV AX, taxRM
+    MOV DX, taxDec
+
     CALL PrintMoney
+
 
     MOV AH, 09H
     LEA DX, NETMSG
     INT 21H
 
-    MOV AX, netInterest
+    MOV AX, netInterestRM
+    MOV DX, netInterestDec
+
     CALL PrintMoney
 
     JMP MainMenuLoop
@@ -260,6 +341,7 @@ DoOption2:
 
 ; =========================================================
 ; OPTION 3
+; MONTHLY PAYOUT
 ; =========================================================
 
 DoOption3:
@@ -267,11 +349,15 @@ DoOption3:
     CALL GetPrincipalAndMonths
     CALL CalculateInterest
 
+    CALL DisplayResultTitle
+
     MOV AH, 09H
     LEA DX, MONTHLYMSG
     INT 21H
 
-    MOV AX, monthlyPayout
+    MOV AX, monthlyPayoutRM
+    MOV DX, monthlyPayoutDec
+
     CALL PrintMoney
 
     JMP MainMenuLoop
@@ -279,6 +365,7 @@ DoOption3:
 
 ; =========================================================
 ; OPTION 4
+; BANK ACCOUNT SUMMARY
 ; =========================================================
 
 DoOption4:
@@ -295,7 +382,7 @@ DoOption4:
 ; RETURN TO LOGIN
 ; =========================================================
 
-DoReturnLogin:
+ReturnToLogin:
 
     CALL UserLogin
 
@@ -311,12 +398,14 @@ MAIN ENDP
 CreateAccount PROC
 
     MOV AL, accountCount
+
     CMP AL, 3
-    JB CreateAccountOK
+    JNE CreateAccountContinue
+
     JMP AccountFull
 
 
-CreateAccountOK:
+CreateAccountContinue:
 
     MOV AH, 09H
     LEA DX, CREATE_TITLE
@@ -324,7 +413,7 @@ CreateAccountOK:
 
 
 ; =========================================================
-; ENTER USER ID
+; USER ID
 ; =========================================================
 
     MOV AH, 09H
@@ -340,31 +429,32 @@ CreateIDLoop:
     INT 21H
 
     CMP AL, 0DH
-    JE CreateIDLoop
+    JNE StoreCreateID
+
+    JMP CreateIDLoop
+
+
+StoreCreateID:
 
     MOV USERID[SI], AL
 
     INC SI
 
     CMP SI, 4
-    JL CreateIDLoop
+    JNE CreateIDLoop
 
 
-; =========================================================
-; WAIT FOR ENTER
-; =========================================================
-
-CreateIDWaitEnter:
+CreateIDEnter:
 
     MOV AH, 01H
     INT 21H
 
     CMP AL, 0DH
-    JNE CreateIDWaitEnter
+    JNE CreateIDEnter
 
 
 ; =========================================================
-; ENTER PASSWORD
+; PASSWORD
 ; =========================================================
 
     MOV AH, 09H
@@ -380,27 +470,28 @@ CreatePasswordLoop:
     INT 21H
 
     CMP AL, 0DH
-    JE CreatePasswordLoop
+    JNE StoreCreatePassword
+
+    JMP CreatePasswordLoop
+
+
+StoreCreatePassword:
 
     MOV PASSWORD[SI], AL
 
     INC SI
 
     CMP SI, 4
-    JL CreatePasswordLoop
+    JNE CreatePasswordLoop
 
 
-; =========================================================
-; WAIT FOR ENTER
-; =========================================================
-
-CreatePasswordWaitEnter:
+CreatePasswordEnter:
 
     MOV AH, 01H
     INT 21H
 
     CMP AL, 0DH
-    JNE CreatePasswordWaitEnter
+    JNE CreatePasswordEnter
 
 
 ; =========================================================
@@ -414,7 +505,6 @@ CreatePasswordWaitEnter:
     MUL BL
 
     MOV DI, AX
-
     MOV SI, 0
 
 
@@ -427,7 +517,7 @@ StoreIDLoop:
     INC DI
 
     CMP SI, 4
-    JL StoreIDLoop
+    JNE StoreIDLoop
 
 
 ; =========================================================
@@ -441,7 +531,6 @@ StoreIDLoop:
     MUL BL
 
     MOV DI, AX
-
     MOV SI, 0
 
 
@@ -454,12 +543,8 @@ StorePasswordLoop:
     INC DI
 
     CMP SI, 4
-    JL StorePasswordLoop
+    JNE StorePasswordLoop
 
-
-; =========================================================
-; ACCOUNT CREATED
-; =========================================================
 
     INC accountCount
 
@@ -469,10 +554,6 @@ StorePasswordLoop:
 
     RET
 
-
-; =========================================================
-; ACCOUNT FULL
-; =========================================================
 
 AccountFull:
 
@@ -492,75 +573,83 @@ CreateAccount ENDP
 UserLogin PROC
 
 
-; =========================================================
-; LOGIN PAGE
-; =========================================================
-
 LoginPage:
 
     MOV AH, 09H
     LEA DX, LOGIN_TITLE
     INT 21H
 
+    MOV AH, 01H
+    INT 21H
 
-; =========================================================
-; SELECT LOGIN / REGISTER / END SYSTEM
-; =========================================================
+    CMP AL, '1'
+    JNE LoginCheck2
 
-   MOV AH, 01H
-   INT 21H
-
-   CMP AL, '1'
-   JE StartLogin
-
-   CMP AL, '2'
-   JE CallRegister
-
-   CMP AL, '3'
-   JE CheckEndSystem
-
-   MOV AH, 09H
-   LEA DX, INVALIDLOGINOPTION
-   INT 21H
-
-   JMP LoginPage
+    JMP StartLogin
 
 
-CallRegister:
-   ; Clear ENTER after option 2
-   MOV AH, 01H
-   INT 21H
-   
-   CALL CreateAccount
-   JMP LoginPage
+LoginCheck2:
+
+    CMP AL, '2'
+    JNE LoginCheck3
+
+    JMP RegisterChoice
 
 
-CheckEndSystem:
+LoginCheck3:
+
+    CMP AL, '3'
+    JNE InvalidLoginChoice
+
     JMP EndSystem
 
 
+InvalidLoginChoice:
+
+    MOV AH, 09H
+    LEA DX, INVALIDLOGINOPTION
+    INT 21H
+
+    JMP LoginPage
+
+
 ; =========================================================
-; START LOGIN
+; REGISTER
 ; =========================================================
 
-StartLogin:
+RegisterChoice:
 
-; Clear ENTER after option 1
+WaitRegisterEnter:
 
     MOV AH, 01H
     INT 21H
 
     CMP AL, 0DH
-    JE LoginIDStart
+    JNE WaitRegisterEnter
 
-    JMP StartLogin
+    CALL CreateAccount
+
+    JMP LoginPage
 
 
 ; =========================================================
-; USER ID
+; LOGIN
 ; =========================================================
 
-LoginIDStart:
+StartLogin:
+
+WaitLoginEnter:
+
+    MOV AH, 01H
+    INT 21H
+
+    CMP AL, 0DH
+    JNE WaitLoginEnter
+
+
+; =========================================================
+; READ USER ID
+; =========================================================
 
     MOV AH, 09H
     LEA DX, LOGIN_ID
@@ -579,12 +668,8 @@ ReadLoginID:
     INC SI
 
     CMP SI, 4
-    JL ReadLoginID
+    JNE ReadLoginID
 
-
-; =========================================================
-; ENTER AFTER USER ID
-; =========================================================
 
 LoginIDEnter:
 
@@ -610,7 +695,7 @@ CopyLoginID:
     INC SI
 
     CMP SI, 4
-    JL CopyLoginID
+    JNE CopyLoginID
 
 
 ; =========================================================
@@ -623,13 +708,14 @@ CopyLoginID:
 SearchAccount:
 
     MOV AL, BL
-    CMP AL, accountCount
 
-    JB SearchAccountOK
+    CMP AL, accountCount
+    JB SearchAccountValid
+
     JMP LoginError
 
 
-SearchAccountOK:
+SearchAccountValid:
 
     MOV AL, BL
     XOR AH, AH
@@ -641,40 +727,28 @@ SearchAccountOK:
     MOV SI, 0
 
 
-; =========================================================
-; COMPARE USER ID
-; =========================================================
-
 CompareLoginID:
 
     MOV AL, USERID[SI]
 
     CMP AL, accountIDs[DI]
-
-    JE LoginIDCharacterOK
+    JE IDCharacterOK
 
     JMP NextAccount
 
 
-LoginIDCharacterOK:
+IDCharacterOK:
 
     INC SI
     INC DI
 
     CMP SI, 4
-    JL CompareLoginID
-
-
-; User ID found
+    JNE CompareLoginID
 
     MOV currentAccount, BL
 
     JMP ReadLoginPassword
 
-
-; =========================================================
-; NEXT ACCOUNT
-; =========================================================
 
 NextAccount:
 
@@ -684,7 +758,7 @@ NextAccount:
 
 
 ; =========================================================
-; PASSWORD
+; READ PASSWORD
 ; =========================================================
 
 ReadLoginPassword:
@@ -706,12 +780,8 @@ ReadPasswordLoop:
     INC SI
 
     CMP SI, 4
-    JL ReadPasswordLoop
+    JNE ReadPasswordLoop
 
-
-; =========================================================
-; ENTER AFTER PASSWORD
-; =========================================================
 
 LoginPasswordEnter:
 
@@ -737,7 +807,7 @@ CopyLoginPassword:
     INC SI
 
     CMP SI, 4
-    JL CopyLoginPassword
+    JNE CopyLoginPassword
 
 
 ; =========================================================
@@ -759,7 +829,6 @@ ComparePasswordLoop:
     MOV AL, PASSWORD[SI]
 
     CMP AL, accountPasswords[DI]
-
     JE PasswordCharacterOK
 
     JMP LoginError
@@ -771,12 +840,8 @@ PasswordCharacterOK:
     INC DI
 
     CMP SI, 4
-    JL ComparePasswordLoop
+    JNE ComparePasswordLoop
 
-
-; =========================================================
-; LOGIN SUCCESS
-; =========================================================
 
     MOV AH, 09H
     LEA DX, LOGIN_SUCCESS
@@ -828,17 +893,13 @@ MainMenu PROC
     MOV BL, AL
 
 
-; =========================================================
-; CLEAR ENTER
-; =========================================================
-
-MenuEnter:
+MainMenuWaitEnter:
 
     MOV AH, 01H
     INT 21H
 
     CMP AL, 0DH
-    JNE MenuEnter
+    JNE MainMenuWaitEnter
 
     MOV AL, BL
 
@@ -862,7 +923,12 @@ GetPrincipalAgain:
 
     CALL ReadNumber
 
-    JC PrincipalError
+    JNC PrincipalValid
+
+    JMP PrincipalError
+
+
+PrincipalValid:
 
     MOV principal, AX
 
@@ -879,10 +945,11 @@ PrincipalError:
 
 
 ; =========================================================
-; MONTHS
+; GET MONTHS
 ; =========================================================
 
 GetMonths:
+
 
 GetMonthsAgain:
 
@@ -892,10 +959,20 @@ GetMonthsAgain:
 
     CALL ReadNumber
 
-    JC MonthsError
+    JNC MonthsInputValid
+
+    JMP MonthsError
+
+
+MonthsInputValid:
 
     CMP AX, 0
-    JE MonthsZero
+    JNE MonthsNotZero
+
+    JMP MonthsZero
+
+
+MonthsNotZero:
 
     MOV months, AX
 
@@ -924,12 +1001,17 @@ GetPrincipalAndMonths ENDP
 
 ; =========================================================
 ; READ NUMBER
+;
+; AX = number
+;
+; CF = 0 valid
+; CF = 1 invalid
+;
 ; =========================================================
 
 ReadNumber PROC
 
     XOR BX, BX
-    MOV SI, 0
 
 
 ReadNumberLoop:
@@ -937,24 +1019,16 @@ ReadNumberLoop:
     MOV AH, 01H
     INT 21H
 
-
-    ; ENTER
-
     CMP AL, 0DH
     JE ReadNumberDone
 
 
-    ; Negative sign
+; =========================================================
+; CHECK NEGATIVE
+; =========================================================
 
     CMP AL, '-'
-
-    ; Local jump to invalid
-    JE NumberNegative
-
-    JMP CheckNumberDigit
-
-
-NumberNegative:
+    JNE CheckDigit
 
     JMP ReadNumberInvalid
 
@@ -963,25 +1037,38 @@ NumberNegative:
 ; CHECK DIGIT
 ; =========================================================
 
-CheckNumberDigit:
+CheckDigit:
 
     CMP AL, '0'
-    JB ReadNumberInvalid
+    JAE CheckDigitUpper
+
+    JMP ReadNumberInvalid
+
+
+CheckDigitUpper:
 
     CMP AL, '9'
-    JA ReadNumberInvalid
+    JBE ValidDigit
+
+    JMP ReadNumberInvalid
 
 
-    ; Convert ASCII to number
+; =========================================================
+; ASCII TO NUMBER
+; =========================================================
+
+ValidDigit:
 
     SUB AL, '0'
 
     XOR AH, AH
 
-    MOV SI, AX
+    MOV DI, AX
 
 
-    ; BX * 10
+; =========================================================
+; BX = BX x 10
+; =========================================================
 
     MOV AX, BX
 
@@ -989,12 +1076,22 @@ CheckNumberDigit:
 
     MUL DX
 
+    CMP DX, 0
+    JE NoMultiplyOverflow
 
-    ; Add digit
+    JMP ReadNumberInvalid
 
-    ADD AX, SI
 
-    JC ReadNumberInvalid
+NoMultiplyOverflow:
+
+    ADD AX, DI
+
+    JNC NoAddOverflow
+
+    JMP ReadNumberInvalid
+
+
+NoAddOverflow:
 
     MOV BX, AX
 
@@ -1002,18 +1099,18 @@ CheckNumberDigit:
 
 
 ; =========================================================
-; INVALID INPUT
+; INVALID
 ; =========================================================
 
 ReadNumberInvalid:
 
-ClearInvalidInput:
+ClearInputLoop:
 
     MOV AH, 01H
     INT 21H
 
     CMP AL, 0DH
-    JNE ClearInvalidInput
+    JNE ClearInputLoop
 
     STC
 
@@ -1021,7 +1118,7 @@ ClearInvalidInput:
 
 
 ; =========================================================
-; NUMBER COMPLETE
+; VALID
 ; =========================================================
 
 ReadNumberDone:
@@ -1037,59 +1134,382 @@ ReadNumber ENDP
 
 ; =========================================================
 ; CALCULATE INTEREST
+;
+; IMPORTANT FORMULA:
+;
+; Total Interest
+; = Principal x Rate x Months / 12
+;
+; Because rate is 5%:
+;
+; Principal x 5 x Months / 12
+;
+; The result here is stored as CENTS.
+;
+; Example:
+;
+; Principal = 10000
+; Rate      = 5
+; Months    = 24
+;
+; 10000 x 5 x 24 = 1200000
+;
+; 1200000 / 12 = 100000 cents
+;
+; 100000 cents = RM1000.00
+;
 ; =========================================================
 
 CalculateInterest PROC
 
-    ; Total Interest
-    ; principal * rate
+
+; =========================================================
+; CLEAR OLD RESULTS
+; =========================================================
+
+    MOV totalInterestRM, 0
+    MOV totalInterestDec, 0
+
+    MOV taxRM, 0
+    MOV taxDec, 0
+
+    MOV netInterestRM, 0
+    MOV netInterestDec, 0
+
+    MOV monthlyPayoutRM, 0
+    MOV monthlyPayoutDec, 0
+
+
+; =========================================================
+; PRINCIPAL x RATE
+; =========================================================
 
     MOV AX, principal
+
     MOV BX, rate
 
     MUL BX
 
-    MOV totalInterest, AX
+    MOV workLow, AX
+    MOV workHigh, DX
 
 
-    ; Tax = Total Interest / 10
-
-    MOV AX, totalInterest
-    MOV BX, 10
-
-    XOR DX, DX
-
-    DIV BX
-
-    MOV taxDeduction, AX
-
-
-    ; Net Interest
-    ; Total Interest - Tax
-
-    MOV AX, totalInterest
-
-    SUB AX, taxDeduction
-
-    MOV netInterest, AX
-
-
-    ; Monthly Payout
-    ; Net Interest / Months
-
-    MOV AX, netInterest
-
-    XOR DX, DX
+; =========================================================
+; x MONTHS
+; =========================================================
 
     MOV BX, months
 
-    DIV BX
+    CALL Mul32By16
 
-    MOV monthlyPayout, AX
+
+; =========================================================
+; / 12
+;
+; Result = TOTAL INTEREST IN CENTS
+;
+; DO NOT multiply by 100 here.
+; =========================================================
+
+    MOV BX, 12
+
+    CALL Div32By16
+
+
+; =========================================================
+; SAVE TOTAL CENTS
+; =========================================================
+
+    MOV workLow, AX
+    MOV workHigh, DX
+
+
+; =========================================================
+; CENTS / 100
+;
+; Quotient = RM
+; Remainder = decimal cents
+; =========================================================
+
+    MOV BX, 100
+
+    CALL Div32By16
+
+    MOV totalInterestRM, AX
+
+    MOV AX, remainderValue
+    MOV totalInterestDec, AX
+
+
+; =========================================================
+; TAX
+;
+; Tax = Total Interest x 10%
+; =========================================================
+
+; Convert RM back to cents
+
+    MOV AX, totalInterestRM
+
+    MOV workLow, AX
+    MOV workHigh, 0
+
+    MOV BX, 100
+
+    CALL Mul32By16
+
+
+; Add decimal cents
+
+    MOV AX, workLow
+
+    ADD AX, totalInterestDec
+
+    MOV workLow, AX
+
+    MOV AX, workHigh
+
+    ADC AX, 0
+
+    MOV workHigh, AX
+
+
+; =========================================================
+; / 10
+; =========================================================
+
+    MOV BX, 10
+
+    CALL Div32By16
+
+
+    MOV workLow, AX
+    MOV workHigh, DX
+
+
+; =========================================================
+; / 100
+; =========================================================
+
+    MOV BX, 100
+
+    CALL Div32By16
+
+    MOV taxRM, AX
+
+    MOV AX, remainderValue
+    MOV taxDec, AX
+
+
+; =========================================================
+; NET INTEREST
+;
+; Net = Total - Tax
+; =========================================================
+
+    MOV AX, totalInterestDec
+
+    SUB AX, taxDec
+
+    JNC NetNoBorrow
+
+; Borrow 1 RM
+
+    ADD AX, 100
+
+    MOV netInterestDec, AX
+
+    MOV AX, totalInterestRM
+
+    SUB AX, taxRM
+
+    DEC AX
+
+    MOV netInterestRM, AX
+
+    JMP CalculateMonthly
+
+
+NetNoBorrow:
+
+    MOV netInterestDec, AX
+
+    MOV AX, totalInterestRM
+
+    SUB AX, taxRM
+
+    MOV netInterestRM, AX
+
+
+; =========================================================
+; MONTHLY PAYOUT
+;
+; Monthly = Net Interest / Months
+; =========================================================
+
+CalculateMonthly:
+
+; Convert RM to cents
+
+    MOV AX, netInterestRM
+
+    MOV workLow, AX
+    MOV workHigh, 0
+
+    MOV BX, 100
+
+    CALL Mul32By16
+
+
+; Add decimal cents
+
+    MOV AX, workLow
+
+    ADD AX, netInterestDec
+
+    MOV workLow, AX
+
+    MOV AX, workHigh
+
+    ADC AX, 0
+
+    MOV workHigh, AX
+
+
+; =========================================================
+; / MONTHS
+; =========================================================
+
+    MOV BX, months
+
+    CALL Div32By16
+
+
+    MOV workLow, AX
+    MOV workHigh, DX
+
+
+; =========================================================
+; / 100
+; =========================================================
+
+    MOV BX, 100
+
+    CALL Div32By16
+
+    MOV monthlyPayoutRM, AX
+
+    MOV AX, remainderValue
+    MOV monthlyPayoutDec, AX
+
 
     RET
 
 CalculateInterest ENDP
+
+
+; =========================================================
+; 32-BIT x 16-BIT
+;
+; Input:
+;
+; workHigh:workLow
+; BX = multiplier
+;
+; Output:
+;
+; workHigh:workLow
+;
+; =========================================================
+
+Mul32By16 PROC
+
+    MOV AX, workLow
+
+    MUL BX
+
+    MOV tempLow, AX
+    MOV tempHigh, DX
+
+
+    MOV AX, workHigh
+
+    MUL BX
+
+    ADD AX, tempHigh
+
+    MOV workHigh, AX
+
+    MOV AX, tempLow
+
+    MOV workLow, AX
+
+    RET
+
+Mul32By16 ENDP
+
+
+; =========================================================
+; 32-BIT / 16-BIT
+;
+; Input:
+;
+; workHigh:workLow
+; BX = divisor
+;
+; Output:
+;
+; DX:AX = quotient
+; remainderValue = remainder
+;
+; =========================================================
+
+Div32By16 PROC
+
+    MOV AX, workHigh
+
+    XOR DX, DX
+
+    DIV BX
+
+    MOV quotientHigh, AX
+    MOV remainderValue, DX
+
+
+    MOV AX, workLow
+
+    MOV DX, remainderValue
+
+    DIV BX
+
+    MOV quotientLow, AX
+    MOV remainderValue, DX
+
+
+    MOV AX, quotientLow
+
+    MOV DX, quotientHigh
+
+    RET
+
+Div32By16 ENDP
+
+
+; =========================================================
+; DISPLAY RESULT TITLE
+; =========================================================
+
+DisplayResultTitle PROC
+
+    MOV AH, 09H
+
+    LEA DX, RESULTTITLE
+
+    INT 21H
+
+    RET
+
+DisplayResultTitle ENDP
 
 
 ; =========================================================
@@ -1105,7 +1525,6 @@ BankAccountSummary PROC
 
 ; =========================================================
 ; PRINCIPAL
-; Principal is direct RM
 ; =========================================================
 
     MOV AH, 09H
@@ -1117,16 +1536,14 @@ BankAccountSummary PROC
     CALL PrintNumber
 
     MOV DL, '.'
+
     MOV AH, 02H
+
     INT 21H
 
-    MOV DL, '0'
-    MOV AH, 02H
-    INT 21H
+    MOV AX, 0
 
-    MOV DL, '0'
-    MOV AH, 02H
-    INT 21H
+    CALL PrintTwoDigits
 
 
 ; =========================================================
@@ -1137,7 +1554,8 @@ BankAccountSummary PROC
     LEA DX, SIMINTM
     INT 21H
 
-    MOV AX, totalInterest
+    MOV AX, totalInterestRM
+    MOV DX, totalInterestDec
 
     CALL PrintMoney
 
@@ -1150,7 +1568,8 @@ BankAccountSummary PROC
     LEA DX, TAXM
     INT 21H
 
-    MOV AX, taxDeduction
+    MOV AX, taxRM
+    MOV DX, taxDec
 
     CALL PrintMoney
 
@@ -1163,7 +1582,8 @@ BankAccountSummary PROC
     LEA DX, NETM
     INT 21H
 
-    MOV AX, netInterest
+    MOV AX, netInterestRM
+    MOV DX, netInterestDec
 
     CALL PrintMoney
 
@@ -1176,7 +1596,8 @@ BankAccountSummary PROC
     LEA DX, MONTHM
     INT 21H
 
-    MOV AX, monthlyPayout
+    MOV AX, monthlyPayoutRM
+    MOV DX, monthlyPayoutDec
 
     CALL PrintMoney
 
@@ -1192,15 +1613,13 @@ BankAccountSummary ENDP
 
 ; =========================================================
 ; PRINT MONEY
+;
+; AX = RM
+; DX = decimal
+;
 ; =========================================================
 
 PrintMoney PROC
-
-    XOR DX, DX
-
-    MOV BX, 100
-
-    DIV BX
 
     MOV DI, DX
 
@@ -1208,7 +1627,9 @@ PrintMoney PROC
 
 
     MOV DL, '.'
+
     MOV AH, 02H
+
     INT 21H
 
 
@@ -1223,21 +1644,26 @@ PrintMoney ENDP
 
 ; =========================================================
 ; PRINT NUMBER
+;
+; AX = integer
 ; =========================================================
 
 PrintNumber PROC
 
     CMP AX, 0
-    JNE ConvertNumber
+    JNE NumberNotZero
+
 
     MOV DL, '0'
+
     MOV AH, 02H
+
     INT 21H
 
     RET
 
 
-ConvertNumber:
+NumberNotZero:
 
     MOV BX, 10
 
@@ -1267,6 +1693,7 @@ PrintLoop:
     ADD DL, '0'
 
     MOV AH, 02H
+
     INT 21H
 
     CMP SI, 0
@@ -1279,6 +1706,9 @@ PrintNumber ENDP
 
 ; =========================================================
 ; PRINT TWO DIGITS
+;
+; AX = 0 - 99
+;
 ; =========================================================
 
 PrintTwoDigits PROC
@@ -1297,6 +1727,7 @@ PrintTwoDigits PROC
     MOV DL, AL
 
     MOV AH, 02H
+
     INT 21H
 
 
@@ -1305,6 +1736,7 @@ PrintTwoDigits PROC
     ADD DL, '0'
 
     MOV AH, 02H
+
     INT 21H
 
     RET
